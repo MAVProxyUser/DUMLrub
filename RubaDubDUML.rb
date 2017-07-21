@@ -12,6 +12,14 @@ require 'rubygems'
 require 'serialport'
 require 'net/http'
 
+# Ruby code from: 
+# https://github.com/zachhale/ruby-crc16/blob/master/crc16.rb
+# DJI CRC table from:
+# https://github.com/dji-sdk/Guidance-SDK/blob/master/examples/uart_example/crc16.cpp
+# const unsigned short CRC_INIT = 0x3692; //0x7000;  //dji naza
+# Initial seed confirmed:
+# https://github.com/mefistotelis/phantom-firmware-tools/issues/25#issue-215926316
+
 CRC_LOOKUP = [
     0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf,
     0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7, 
