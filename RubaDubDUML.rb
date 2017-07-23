@@ -153,6 +153,8 @@ size = size.to_s.force_encoding('UTF-8')
 #         "\x55\x1A\x04\xB1\x2A\x28\x6B\x57\x40\x00\x08\x00     \x00\x2A\xA0\x06                     \x00\x00\x00\x00\x00\x00\x02\x04     \x72\x43"
 
 imageSize_preCRC =  "\x55\x1A\x04\xB1\x2A\x28\x6B\x57\x40\x00\x08\x00" +        size                        + "\x00\x00\x00\x00\x00\x00\x02\x04" 
+# ‘dji_system.bin’ - "00  00  00  00  00  00  02  04"
+# ‘data_copy.bin’ -  "00  00  00  00  00  00  02  08"
 
 crc = crc16(imageSize_preCRC) # jumping through same hoop we did for size 
 crc = Array(crc).pack('V')
