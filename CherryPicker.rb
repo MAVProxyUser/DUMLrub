@@ -184,19 +184,19 @@ end
 # 0801 - Android recovery ROM?
 # 0802 - Modvidius ma2155 VPU firmware, "DJI_IMX377" (CMOS image sensor) firmware, Veri Silicon Hantaro Video IP encoder/decoder ?
 # 0803 - 
-# 0804 - 
-# 0805 - 
+# 0804 - "System Initialized" ?
+# 0805 - upgrade.zip (calibration for VPS?)
 # 0900 - P4 OFDM, P4P, i2 LightBridge Upgrade
-# 0905 - 
-# 0907 - 
+# 0905 - NFZ Database (nfz.db and bfz.sig)
+# 0907 - Mavic modem/arm/dsp/gnd/uav "upgrade file" (unencrypted)
 # 1100 - i2 Battery_0, P4, Spark, Mavic Battery Upgrade
 # 1101 - i2 Battery_1 Upgrade
 # 1200 - P4, i2, Spark, Mavic ESC0 Upgrade
 # 1201 - P4, i2, spark, Mavic ESC1 Upgrade
 # 1202 - P4, i2, Spark, Mavic ESC2 Upgrade
 # 1203 - P4, i2, Spark, Mavic ESC3 Upgrade
-# 1301 -
+# 1301 - OTA.zip?
 # 1407 - GLB200A modem/arm/dsp/gnd/uav "upgrade file" (unencrypted)
-# 2801 - 
-# 2803 -
-# 2807 -
+# 2801 - Mavic modem/arm/dsp/gnd/uav "upgrade file" (unencrypted)
+# 2803 -  
+# 2807 - Mavic modem/arm/dsp/gnd/uav "upgrade file" (unencrypted)
