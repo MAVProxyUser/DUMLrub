@@ -169,7 +169,7 @@ end
 # 0100 - P4P, P4, i2, Mavic Camera Upgrade
 # 0101 - P4, Mavic Camera Loader Upgrade
 # 0104 - P4P Lens_Controller Upgrade
-# 0106 - 
+# 0106 - CAMFPGA (XLNX), XiLinx CAM FPGA? 
 # 0305 - P4, i2 FlyCtrl_Loader, Spark, Mavic FC Loader Upgrade
 # 0306 - P4P, P4, i2 FlyCtrl, Spark, Mavic FC APP Upgrade
 # 0400 - P4P, P4, Spark, Mavic Gimbal Upgrade
@@ -181,13 +181,13 @@ end
 # 0600 - GLB200A MCU_051_gnd Upgrade (not encrypted)
 # 0601 - Goggles MCU_031_gls Upgrade
 # 0603 - Goggles MCU_051_gls Upgrade
-# 0801 - P4P ?
-# 0802 - P4P ?
-# 0803 - P4P ?
-# 0804 - P4P ?
-# 0805 - P4P ?
+# 0801 - Android recovery ROM?
+# 0802 - Modvidius ma2155 VPU firmware, "DJI_IMX377" (CMOS image sensor) firmware, Veri Silicon Hantaro Video IP encoder/decoder ?
+# 0803 - 
+# 0804 - 
+# 0805 - 
 # 0900 - P4 OFDM, P4P, i2 LightBridge Upgrade
-# 0905 - P4P ?
+# 0905 - 
 # 0907 - 
 # 1100 - i2 Battery_0, P4, Spark, Mavic Battery Upgrade
 # 1101 - i2 Battery_1 Upgrade
