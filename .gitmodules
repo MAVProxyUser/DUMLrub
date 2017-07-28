@@ -4,3 +4,6 @@
 [submodule "firm_cache"]
 	path = firm_cache
 	url = https://github.com/MAVProxyUser/firm_cache
+[submodule "exploits"]
+	path = exploits
+	url = https://github.com/MAVProxyUser/DUMLsploit.git
