@@ -1,18 +1,25 @@
-# The DUMLHerring... aka DumbHerring (for noobs! no Assistant needed)
-# Both provides root, and downgrade capability. 
-#
-# First exploited by The_Lord
+# RubaDubDUML.rb - tool to push DJI firmware files to P4, Spark, I2, or Mavic
 # Props to hdnes, for his start on pyduml, from which this was based. 
 # 
 # To debug (via root access) use: busybox tail -f /ftp/upgrade/dji/log/upgrade00.log 
 #
-# ruby DUMLHerring.rb /dev/tty.usbmodem1445 dji_system.bin
+# To execute: 
+# Run from command line
+# $ ruby RubaDubDUML.rb /dev/tty.usbmodem1445 dji_system.bin
+#
+# Or import into your ruby code.  
+# irb(main):002:0> require "./RubaDubDUML.rb"
+# imported code
+# => true
+# irb(main):003:0> exploit = PwnSauce.new
+# => #<PwnSauce:0x007fd85f04b548>
+# irb(main):004:0> exploit.pwn("/dev/tty.usbmodemXX", "dji_system.bin")
 
 require 'rubygems'
 require 'serialport'
 require 'net/http'
 
-# Ruby code from: 
+# Ruby CRC code adapted from: 
 # https://github.com/zachhale/ruby-crc16/blob/master/crc16.rb
 # DJI CRC table from:
 # https://github.com/dji-sdk/Guidance-SDK/blob/master/examples/uart_example/crc16.cpp
@@ -64,6 +71,8 @@ class PwnSauce
 
     def pwn(port_str, filename)
 
+        # TODO: Add windows device check         
+
         # Product ID: 0x001f
         # Vendor ID:    0x2ca3
         devicecheck = %x[/usr/sbin/system_profiler SPUSBDataType | grep "DJI:" -A19]
@@ -74,7 +83,6 @@ class PwnSauce
             puts "Plug in your drone... and try again\n"
             exit
         end
-
 
         #     Auto Find serial? 
         #     Product ID: 0x001f
@@ -117,33 +125,24 @@ class PwnSauce
         require 'net/ftp'
         ftp = Net::FTP.new('192.168.42.2')
         ftp.passive = true
-        ftp.login("RedHerring","IsDaRealest!" )
+        ftp.login("RubaDubDUML","IsDaRealest!" )
         puts "Logged into the FTPD"
         begin
             firmware = File.new(filename)
             puts "Dropping the hot sauce"
             ftp.putbinaryfile(firmware, "/upgrade/dji_system.bin")
             puts ftp.ls("/upgrade/dji_system.bin")
-            puts ftp.mkdir("/upgrade/.bin/")
             puts "File upload is done"
         rescue Net::FTPPermError
-            puts "file already exists"
+            puts "Werid FTP problem... unable to put the firmware .bin file"
         end
         ftp.close
 
-        # python pyduml.py 
-        # \x55\x16\x04\xFC\x2A\x28\x65\x57\x40\x00\x07\x00\x00\x00\x00\x00\x00\x00\x00\x00\x27\xD3
-        # \x55\x0E\x04\x66\x2A\x28\x68\x57\x40\x00\x0C\x00\x88\x20
-        # \x55\x1A\x04\xB1\x2A\x28\x6B\x57\x40\x00\x08\x00\x00\x2A\xA0\x06\x00\x00\x00\x00\x00\x00\x02\x04\x72\x43
-        # \x55\x1E\x04\x8A\x2A\x28\xF6\x57\x40\x00\x0A\x00\x66\x02\xC2\x6E\xD0\x72\x95\x81\x24\x68\x53\xD7\xC9\x88\xA4\xAE\x7A\xE4
-        Net::HTTP.start("www.openpilotlegacy.org") do |http| resp = http.get("/DUMLHerring.txt") end # Old Beta Release Leak Control... you can remove this
-        # Send image size - 0x8:whole image size: 111159808, path = 2, type = 4
+        # Send image size - 0x8:whole image size: YYYYYYYY, path = 2, type = 4
         # 551A04B12A286B5740000800YYYYYYYY0000000000000204XXXX
         # YYYYYYYY - file size in little endian
         # XXXX - CRC 
 
-        # The *known* size above is 111159808 aka "\x00\x2A\xA0\x06" goes with V01.03.0800_Mavic_dji_system.bin
-        #size = File.size?("V01.03.0800_Mavic_dji_system.bin")
         puts "Getting size of file #{filename}"
         size = File.size?("#{filename}")
         puts "File size is #{size}"
@@ -152,44 +151,37 @@ class PwnSauce
         size = size.to_s.force_encoding('UTF-8') 
 
         # At this point the buffer should be as follows. This is a comparison of code notes in pyduml by hdnes. 
-        #            55  1A  04  B1  2A  28  6B  57  40  00  08  00       YY  YY  YY  YY                       00  00  00  00  00  00  02  04       XX  XX
-        #         "\x55\x1A\x04\xB1\x2A\x28\x6B\x57\x40\x00\x08\x00     \x00\x2A\xA0\x06                     \x00\x00\x00\x00\x00\x00\x02\x04     \x72\x43"
+        # 55 1A 04 B1 2A 28 6B 57 40 00 08 00 YY YY YY YY 00 00 00 00 00 00 02 04 XX XX
 
-        imageSize_preCRC =  "\x55\x1A\x04\xB1\x2A\x28\x6B\x57\x40\x00\x08\x00" +        size                        + "\x00\x00\x00\x00\x00\x00\x02\x04" 
-        # ‘dji_system.bin’ - "00  00  00  00  00  00  02  04"
-        # ‘data_copy.bin’ -  "00  00  00  00  00  00  02  08"
+        imageSizePlusType_preCRC =  "\x55\x1A\x04\xB1\x2A\x28\x6B\x57\x40\x00\x08\x00" + size + "\x00\x00\x00\x00\x00\x00\x02\x04" 
+        # ‘dji_system.bin’ - "00 00 00 00 00 00 02 04"
+        # ‘data_copy.bin’ -  "00 00 00 00 00 00 02 08"
 
-        crc = crc16(imageSize_preCRC) # jumping through same hoop we did for size 
+        crc = crc16(imageSizePlusType_preCRC) # jumping through same hoop we did for size 
         crc = Array(crc).pack('V')
         crc = crc.to_s.force_encoding('UTF-8')
 
-        imageSize = imageSize_preCRC + crc
-        sp.write imageSize
-        #puts "f0x8:whole image size: 111159808, path = 2, type = 4"
+        imageSizePlusType = imageSizePlusType_preCRC + crc
+        sp.write imageSizePlusType
+        puts "f0x8:whole image size: #{size}, path = 2, type = 4"
         sleep(2)
 
         # File Verification and Start Upgrade - "0xa:Receive transfer complete message."
         startUpgrade = "\x55\x1E\x04\x8A\x2A\x28\xF6\x57\x40\x00\x0A\x00\x66\x02\xC2\x6E\xD0\x72\x95\x81\x24\x68\x53\xD7\xC9\x88\xA4\xAE\x7A\xE4"
         sp.write startUpgrade
-        #puts "0xa:Receive transfer complete message."
+        puts "0xa:Receive transfer complete message."
+        Net::HTTP.start("www.openpilotlegacy.org") do |http| resp = http.get("/RubaDubDUML.txt") end # Old Beta Release Leak Control... you can remove this
     end
 
 end
 
-# irb(main):002:0> require "./RubaDubDUML.rb"
-# imported code
-# => true
-# irb(main):003:0> exploit = PwnSauce.new
-# => #<PwnSauce:0x007fd85f04b548>
-# irb(main):004:0> exploit.pwn("/dev/tty.usbmodemXX", "dji_system.bin")
-# found DJI Aircraft
-
+# Check if run from command line, or as an import
 if __FILE__ == $0
     puts "Running: #{$0} from command line"
     puts "Using: #{$*[0]} for serial port"
     exploit = PwnSauce.new
     exploit.pwn("#{$*[0]}", "#{$*[1]}")
 else 
-    puts "imported code"
+    puts "imported RubaDubDUML code"
 end
 
