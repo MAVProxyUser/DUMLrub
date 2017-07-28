@@ -1,3 +1,4 @@
+#!/usr/bin/env ruby
 # RubaDubDUML.rb - tool to push DJI firmware files to P4, Spark, I2, or Mavic
 # Props to hdnes, for his start on pyduml, from which this was based. 
 # 
@@ -18,6 +19,7 @@
 require 'rubygems'
 require 'serialport'
 require 'net/http'
+require 'net/ftp'
 
 # Ruby CRC code adapted from: 
 # https://github.com/zachhale/ruby-crc16/blob/master/crc16.rb
@@ -103,10 +105,10 @@ class PwnSauce
         stop_bits = 1  
         parity = SerialPort::NONE  
 
-        puts "Using #{port_str} for serial"
+        puts "Connecting to serial: #{port_str}"
         sp = SerialPort.new(port_str, baud_rate, data_bits, stop_bits, parity)  
 
-        puts "You should: busybox tail -f /ftp/upgrade/dji/log/upgrade00.log" 
+        puts "To debug, if you have root: busybox tail -f /ftp/upgrade/dji/log/upgrade00.log" 
 
         # Enter upgrade mode (delete old file if exists) - 0x7:received cmd to request enter upgrade mode, peer_id=0xa01, this_host=0x801
         upgradeMode = "\x55\x16\x04\xFC\x2A\x28\x65\x57\x40\x00\x07\x00\x00\x00\x00\x00\x00\x00\x00\x00\x27\xD3"
@@ -122,7 +124,6 @@ class PwnSauce
         # sleep(2)
 
         # Drop upgrade package. 
-        require 'net/ftp'
         ftp = Net::FTP.new('192.168.42.2')
         ftp.passive = true
         ftp.login("RubaDubDUML","IsDaRealest!" )
@@ -131,7 +132,7 @@ class PwnSauce
             firmware = File.new(filename)
             puts "Dropping the hot sauce"
             ftp.putbinaryfile(firmware, "/upgrade/dji_system.bin")
-            puts ftp.ls("/upgrade/dji_system.bin")
+        #    puts ftp.ls("/upgrade/dji_system.bin")
             puts "File upload is done"
         rescue Net::FTPPermError
             puts "Werid FTP problem... unable to put the firmware .bin file"
@@ -144,10 +145,10 @@ class PwnSauce
         # XXXX - CRC 
 
         puts "Getting size of file #{filename}"
-        size = File.size?("#{filename}")
-        puts "File size is #{size}"
+        filesize = File.size?("#{filename}")
+        #puts "File size is #{filesize}"
  
-        size = Array(size).pack('V') # Jump through hoops to pack the Fixnum as a String! Must do the same for crc
+        size = Array(filesize).pack('V') # Jump through hoops to pack the Fixnum as a String! Must do the same for crc
         size = size.to_s.force_encoding('UTF-8') 
 
         # At this point the buffer should be as follows. This is a comparison of code notes in pyduml by hdnes. 
@@ -163,7 +164,7 @@ class PwnSauce
 
         imageSizePlusType = imageSizePlusType_preCRC + crc
         sp.write imageSizePlusType
-        puts "f0x8:whole image size: #{size}, path = 2, type = 4"
+        puts "0x8:whole image size: #{filesize}, path = 2, type = 4"
         sleep(2)
 
         # File Verification and Start Upgrade - "0xa:Receive transfer complete message."
