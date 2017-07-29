@@ -1,3 +1,4 @@
+require 'nokogiri'
 require "openssl"
 require "base64"
 include Base64
@@ -17,6 +18,7 @@ begin
     puts "Listing files"
     filenames = ftp.nlst()
     p filenames
+    FileUtils.mkdir_p("backup")
     filenames.each{|filename| 
         puts "Downloading file: #{filename} to memory"
         encodedfile = ftp.getbinaryfile(filename,nil) 
@@ -42,10 +44,27 @@ begin
         # Ruby uses PKCS7 Padding by default, so there's no need to adjust this
         
         #puts bytes.pack('c*')
-        puts "Writing file: #{filename}"
-        File.open(filename, "w+") { |file| file.write(bytes.pack('c*')) }
+        puts "Writing file: backup/#{filename}"
+        File.open("backup/#{filename}", "w+") { |file| file.write(bytes.pack('c*')) }
 
     }
+
+# Seek in 480 bytes and look for XML header (then skip it)
+# 000001e0: 3c3f 786d 6c20 7665 7273 696f 6e3d 2231  <?xml version="1
+cfg = Dir.glob('backup/*.cfg.sig')[0]
+config_sig = File.read("#{cfg}")
+startxml = config_sig.index("<dji>")
+config_sig = config_sig[startxml..-24]
+
+firmwarepackage = Nokogiri::XML(config_sig)
+firmwarepackage_version = firmwarepackage.xpath('/dji/device/firmware/release').first['version']
+puts "Firmware version inside package confirmed as #{firmwarepackage_version}"
+
+firmwarepackage.xpath('/dji/device/firmware/release/module').each {|node|
+    puts "#{node.text()} #{node['md5']}"
+}
+
+# validate the MD5's of the downloaded module files before tarring them up.  
 
 #    File.open('dji_system.bin', 'wb') { |tar| 
 #        filenames.each{|filename|
@@ -54,6 +73,8 @@ begin
 #            File.unlink(filename)
 #        }
 #    }
+
+
 rescue Net::FTPPermError
     puts "Weird FTP problem... unable to put the firmware .bin file"
 end
