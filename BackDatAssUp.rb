@@ -46,7 +46,6 @@ begin
         #puts bytes.pack('c*')
         puts "Writing file: backup/#{filename}"
         File.open("backup/#{filename}", "w+") { |file| file.write(bytes.pack('c*')) }
-        puts "File MD5 is " + Digest::MD5.file("backup/#{filename}").hexdigest
     }
 
 # Seek in 480 bytes and look for XML header (then skip it)
@@ -56,15 +55,29 @@ config_sig = File.read("#{cfg}")
 startxml = config_sig.index("<dji>")
 config_sig = config_sig[startxml..-24]
 
+# Extract DJI firmware XML structure 
 firmwarepackage = Nokogiri::XML(config_sig)
 firmwarepackage_version = firmwarepackage.xpath('/dji/device/firmware/release').first['version']
 puts "Firmware version inside package confirmed as #{firmwarepackage_version}"
 
+# validate the MD5's of the downloaded module files before tarring them up.  
 firmwarepackage.xpath('/dji/device/firmware/release/module').each {|node|
-    puts "#{node.text()} #{node['md5']}"
+    filename = node.text()
+    if filename.include? ".cfg.sig"
+        next
+    end
+
+    begin
+        if node['md5'] == Digest::MD5.file("backup/#{filename}").hexdigest
+            puts "File #{filename} MD5 matches .cfg.sig " + Digest::MD5.file("backup/#{filename}").hexdigest 
+        else
+            puts "Mismatch MD5s: " + node['md5'] + "->" + Digest::MD5.file("backup/#{filename}").hexdigest
+        end
+    rescue Errno::ENOENT
+        puts "Warning: File #{filename} does not exist on remote site or was not copied to local backupdir properly"
+    end
 }
 
-# validate the MD5's of the downloaded module files before tarring them up.  
 
 #    File.open('dji_system.bin', 'wb') { |tar| 
 #        filenames.each{|filename|
