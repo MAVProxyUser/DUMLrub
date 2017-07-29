@@ -46,7 +46,7 @@ begin
         #puts bytes.pack('c*')
         puts "Writing file: backup/#{filename}"
         File.open("backup/#{filename}", "w+") { |file| file.write(bytes.pack('c*')) }
-
+        puts "File MD5 is " + Digest::MD5.file("backup/#{filename}").hexdigest
     }
 
 # Seek in 480 bytes and look for XML header (then skip it)
