@@ -200,3 +200,5 @@ end
 # 2801 - Mavic modem/arm/dsp/gnd/uav "upgrade file" (unencrypted)
 # 2803 -  
 # 2807 - Mavic modem/arm/dsp/gnd/uav "upgrade file" (unencrypted)
+# 
+# Match against: https://github.com/mefistotelis/phantom-firmware-tools/issues/25#issuecomment-297153290
