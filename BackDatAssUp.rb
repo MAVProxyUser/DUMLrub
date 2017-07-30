@@ -92,14 +92,14 @@ if missing != ""
     puts "Warning: Files #{missing} exist in the cfg.sig, but were not in the backup folder on the connected drone"
 end
 
-#    File.open('dji_system.bin', 'wb') { |tar| 
-#        filenames.each{|filename|
-#            puts "Adding #{filename} to tar dji_system.bin (tar file)" 
-#            Minitar.pack(filename, tar) 
-#            File.unlink(filename)
-#        }
-#    }
+FileUtils.cd("backup")
+File.open('../dji_system.bin', 'wb') { |tar| 
+    Minitar.pack(filenames, tar) 
+}
 
+filenames.each{|file|
+    File.unlink(file)
+}
 
 
 
