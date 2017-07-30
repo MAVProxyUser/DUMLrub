@@ -17,7 +17,8 @@ begin
     ftp.chdir("/upgrade/upgrade/backup/")
     puts "Listing files"
     filenames = ftp.nlst()
-    p filenames
+    p filenames # need to filter out .tmp files
+
     FileUtils.mkdir_p("backup")
     filenames.each{|filename| 
         puts "Downloading file: #{filename} to memory"
