@@ -1,3 +1,4 @@
+require 'minitar'
 require 'nokogiri'
 require "openssl"
 require "base64"
@@ -5,7 +6,7 @@ include Base64
 require "net/ftp"
 require 'zlib'
 require 'archive/tar/minitar'
-include Archive::Tar
+#include Archive::Tar
 
 # Drop upgrade package.
 ftp = Net::FTP.new('192.168.42.2')
@@ -15,9 +16,11 @@ puts "Logged into the FTPD"
 begin
     puts "Snagging firmware backup files..."
     ftp.chdir("/upgrade/upgrade/backup/")
-    puts "Listing files"
+    puts "List of files to be downloaded:"
     filenames = ftp.nlst()
-    p filenames # need to filter out .tmp files
+    filenames.tap{|s| s.compact}.delete_if {|s| s =~ /\.tmp/}
+
+    p filenames 
 
     FileUtils.mkdir_p("backup")
     filenames.each{|filename| 
@@ -48,6 +51,10 @@ begin
         puts "Writing file: backup/#{filename}"
         File.open("backup/#{filename}", "w+") { |file| file.write(bytes.pack('c*')) }
     }
+rescue Net::FTPPermError
+    puts "Weird FTP problem... unable to put the firmware .bin file"
+end
+ftp.close
 
 # Seek in 480 bytes and look for XML header (then skip it)
 # 000001e0: 3c3f 786d 6c20 7665 7273 696f 6e3d 2231  <?xml version="1
@@ -59,7 +66,9 @@ config_sig = config_sig[startxml..-24]
 # Extract DJI firmware XML structure 
 firmwarepackage = Nokogiri::XML(config_sig)
 firmwarepackage_version = firmwarepackage.xpath('/dji/device/firmware/release').first['version']
-puts "Firmware version inside package confirmed as #{firmwarepackage_version}"
+puts "Firmware version inside cfg.sig in remote backup folder confirmed as #{firmwarepackage_version}"
+
+missing = Array.new
 
 # validate the MD5's of the downloaded module files before tarring them up.  
 firmwarepackage.xpath('/dji/device/firmware/release/module').each {|node|
@@ -75,10 +84,13 @@ firmwarepackage.xpath('/dji/device/firmware/release/module').each {|node|
             puts "Mismatch MD5s: " + node['md5'] + "->" + Digest::MD5.file("backup/#{filename}").hexdigest
         end
     rescue Errno::ENOENT
-        puts "Warning: File #{filename} does not exist on remote site or was not copied to local backupdir properly"
+        missing << filename
     end
 }
 
+if missing != ""
+    puts "Warning: Files #{missing} exist in the cfg.sig, but were not in the backup folder on the connected drone"
+end
 
 #    File.open('dji_system.bin', 'wb') { |tar| 
 #        filenames.each{|filename|
@@ -88,11 +100,6 @@ firmwarepackage.xpath('/dji/device/firmware/release/module').each {|node|
 #        }
 #    }
 
-
-rescue Net::FTPPermError
-    puts "Weird FTP problem... unable to put the firmware .bin file"
-end
-ftp.close
 
 
 
