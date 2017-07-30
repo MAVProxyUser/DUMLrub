@@ -61,7 +61,7 @@ ftp.close
 cfg = Dir.glob('backup/*.cfg.sig')[0]
 config_sig = File.read("#{cfg}")
 startxml = config_sig.index("<dji>")
-config_sig = config_sig[startxml..-24]
+config_sig = config_sig[startxml..-24]  # Windows tosses an error about range() here. 
 
 # Extract DJI firmware XML structure 
 firmwarepackage = Nokogiri::XML(config_sig)
@@ -88,7 +88,7 @@ firmwarepackage.xpath('/dji/device/firmware/release/module').each {|node|
     end
 }
 
-if missing != ""
+if missing != []
     puts "Warning: Files #{missing} exist in the cfg.sig, but were not in the backup folder on the connected drone"
 end
 
