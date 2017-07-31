@@ -71,7 +71,7 @@ class PwnSauce
         crc
     end
 
-    def pwn(port_str, filename)
+    def pwn(port_str, filename, type)
 
         # TODO: Add windows device check         
 
@@ -131,11 +131,14 @@ class PwnSauce
         begin
             firmware = File.new(filename)
             puts "Dropping the hot sauce"
-            ftp.putbinaryfile(firmware, "/upgrade/dji_system.bin")
-        #    puts ftp.ls("/upgrade/dji_system.bin")
+            if type == "nfz"
+                ftp.putbinaryfile(firmware, "/upgrade/data_copy.bin")
+            else
+                ftp.putbinaryfile(firmware, "/upgrade/dji_system.bin")
+            end
             puts "File upload is done"
         rescue Net::FTPPermError
-            puts "Werid FTP problem... unable to put the firmware .bin file"
+            puts "Weird FTP problem... unable to put the firmware .bin file"
         end
         ftp.close
 
@@ -154,9 +157,13 @@ class PwnSauce
         # At this point the buffer should be as follows. This is a comparison of code notes in pyduml by hdnes. 
         # 55 1A 04 B1 2A 28 6B 57 40 00 08 00 YY YY YY YY 00 00 00 00 00 00 02 04 XX XX
 
-        imageSizePlusType_preCRC =  "\x55\x1A\x04\xB1\x2A\x28\x6B\x57\x40\x00\x08\x00" + size + "\x00\x00\x00\x00\x00\x00\x02\x04" 
-        # ‘dji_system.bin’ - "00 00 00 00 00 00 02 04"
-        # ‘data_copy.bin’ -  "00 00 00 00 00 00 02 08"
+        if type == "nfz"
+            # ‘data_copy.bin’ -  "00 00 00 00 00 00 02 08"
+            imageSizePlusType_preCRC =  "\x55\x1A\x04\xB1\x2A\x28\x6B\x57\x40\x00\x08\x00" + size + "\x00\x00\x00\x00\x00\x00\x02\x08" 
+        else
+            # ‘dji_system.bin’ - "00 00 00 00 00 00 02 04"
+            imageSizePlusType_preCRC =  "\x55\x1A\x04\xB1\x2A\x28\x6B\x57\x40\x00\x08\x00" + size + "\x00\x00\x00\x00\x00\x00\x02\x04" 
+        end
 
         crc = crc16(imageSizePlusType_preCRC) # jumping through same hoop we did for size 
         crc = Array(crc).pack('V')
@@ -181,7 +188,7 @@ if __FILE__ == $0
     puts "Running: #{$0} from command line"
     puts "Using: #{$*[0]} for serial port"
     exploit = PwnSauce.new
-    exploit.pwn("#{$*[0]}", "#{$*[1]}")
+    exploit.pwn("#{$*[0]}", "#{$*[1]}", "")
 else 
     puts "imported RubaDubDUML code"
 end
