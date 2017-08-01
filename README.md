@@ -1,6 +1,17 @@
 # DUMLrub
 Ruby port of PyDUML 
 
+Main executables:
+BackDatAssUp.rb - This mimics the "backup" button inside DUMLdore, with a bit more rigorous checks on structure. 
+CherryPicker.rb - Tool to "reroll" firmware binaries with specific modules selected. 
+LogJammer.rb - Standalone tool for reading upgrade00.log
+RubaDubDUML.rb - analog of pyduml.py, used for pushing firmware binaries over serial via DUML protocol 
+
+Git Submodule repos:
+exploits - folder contains public and private exploits such as RedHerring converted to use RubaDubDUML as a library
+firm_cache - individual firmware modules from DJI firmware 
+bins - dji_system.bin stash
+
 Awwwww it feels soooooo good. 
 
 Rub-a-dub-dub,
