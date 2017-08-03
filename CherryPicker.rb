@@ -37,6 +37,7 @@ puts "Name is: #{name}"
 
 if ARGV[1] == nil
     puts "Available firmware versions:"
+    FileUtils.cd("firm_cache")
     Dir.glob("cfgs/V*/*.cfg.sig") {|file|
         if file.include?(models[name])
             puts "- " + file.split('_')[0].split('/')[1]
