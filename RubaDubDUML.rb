@@ -108,7 +108,7 @@ class PwnSauce
         puts "Connecting to serial: #{port_str}"
         sp = SerialPort.new(port_str, baud_rate, data_bits, stop_bits, parity)  
 
-        puts "To debug, if you have root: busybox tail -f /ftp/upgrade/dji/log/upgrade00.log" 
+        puts "To debug, if you have root: busybox tail -f /ftp/upgrade/dji/log/upgrade00.log | grep -v sys_up_status_push_threa" 
 
         # Enter upgrade mode (delete old file if exists) - 0x7:received cmd to request enter upgrade mode, peer_id=0xa01, this_host=0x801
         upgradeMode = "\x55\x16\x04\xFC\x2A\x28\x65\x57\x40\x00\x07\x00\x00\x00\x00\x00\x00\x00\x00\x00\x27\xD3"
