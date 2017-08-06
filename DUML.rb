@@ -120,6 +120,7 @@ class DUML
         buf += [ crc_hdr(buf), @src, @dst, @@seq_no, cmd_type, cmd_set, cmd_id ].pack("CCCS<CCC")
         buf += payload.pack("C*")
         buf += [ crc16(buf) ].pack("S<")
+        @@seq_no += 1
         buf
     end
 
