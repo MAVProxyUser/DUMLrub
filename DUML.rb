@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/usr/bin/env ruby2.4
 
 require 'rubygems'
 
@@ -17,7 +17,7 @@ class DUML
 
     @@seq_no = 0x1234
 
-    def initialize(src, dst)
+    def initialize(src:, dst:)
         @src = src
         @dst = dst
     end
@@ -113,24 +113,50 @@ class DUML
         puts out
     end
 
-    def gen(cmd_type, cmd_set, cmd_id, payload = nil)
-        payload ||= []
+    def gen(type:, set:, id:, payload: [])
         length = 13 + payload.length
         buf = [ 0x55, length & 0xff, 0x04 | length >> 8 ].pack("CCC")
-        buf += [ crc_hdr(buf), @src, @dst, @@seq_no, cmd_type, cmd_set, cmd_id ].pack("CCCS<CCC")
+        buf += [ crc_hdr(buf), @src, @dst, @@seq_no, type, set, id ].pack("CCCS<CCC")
         buf += payload.pack("C*")
         buf += [ crc16(buf) ].pack("S<")
         @@seq_no += 1
         buf
     end
 
+    def cmd_enter_upgrade_mode() # 0x07
+        gen(type: 0x40, set: 0x00, id: 0x07, payload:
+            [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ])
+    end
+
+    def cmd_upgrade_data(filesize:, path:, type:) # 0x08
+        gen(type: 0x40, set: 0x00, id: 0x08, payload:
+            [ 0x00 ] + [ filesize ].pack("L<").unpack("CCCC") + [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, path, type ])
+    end
+
+    def cmd_transfer_upgrade_data(index:, data:) # 0x09
+        gen(type: 0x00, set: 0x00, id: 0x09, payload:
+            [ 0x00 ] + [ index ].pack("L<").unpack("CCCC") + [ data.length ].pack("S<").unpack("CC") + data)
+    end
+
+    def cmd_finish_upgrade_data(md5:) # 0x0a
+        gen(type: 0x40, set: 0x00, id: 0x0a, payload:
+            [ 0x00 ] + md5)
+    end
+
+    def cmd_report_status() # 0x0c
+        gen(type: 0x40, set: 0x00, id: 0x0c, payload: [ 0x00 ])
+    end
+
 end
 
 if __FILE__ == $0
     # debugging
-    duml = DUML.new(0x2a, 0x28)
-    duml.hexdump(duml.gen(0x40, 0x00, 0x07, [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ]))
-    duml.hexdump(duml.gen(0x40, 0x00, 0x08, [ 0x00 ] + [ 0x12345678 ].pack("L<").unpack("CCCC") + [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x04 ]))
+    duml = DUML.new(src: 0x2a, dst: 0x28)
+    duml.hexdump(duml.gen(type: 0x40, set: 0x00, id: 0x00))
+    duml.hexdump(duml.gen(type: 0x40, set: 0x00, id: 0x07, payload: [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ]))
+    duml.hexdump(duml.gen(type: 0x40, set: 0x00, id: 0x08, payload: [ 0x00 ] + [ 0x12345678 ].pack("L<").unpack("CCCC") + [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x04 ]))
+    duml.hexdump(duml.cmd_upgrade_data(filesize: 0x12345678, path: 2, type: 4))
+    duml.hexdump(duml.cmd_transfer_upgrade_data(index: 100, data: Array.new(1000, 0)))
 end
 
 # vim: expandtab:ts=4:sw=4
