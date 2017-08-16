@@ -16,7 +16,7 @@ class Upgrade
             raise "#{@filename} doesn't exists"
         end
         @data = File.read(@filename).unpack("C*")
-        @duml = DUML.new(src: src, dst: dst)
+        @duml = DUML.new(src: src, dst: dst, connection: connection)
         @targetfile = targetfile
         @path = path
         @type = type
@@ -75,56 +75,21 @@ class Upgrade
     end
 end
 
-class UpgradeOutput
-    def write(buf)
-        out = ""
-        buf.each_byte do |b|
-            out += "%02x " % b
-        end
-        puts out
-    end
-end
-
-class UpgradeOutputSerial < UpgradeOutput
-    def initialize(port)
-        baud_rate = 115200
-        data_bits = 8
-        stop_bits = 1
-        parity = SerialPort::NONE
-
-        @sp = SerialPort.new(port, baud_rate, data_bits, stop_bits, parity)
-    end
-
-    def write(buf)
-        #super(buf)
-        @sp.write(buf)
-    end
-end
-
-class UpgradeOutputSocket < UpgradeOutput
-    def initialize(hostname, port)
-        @sock = TCPSocket.open(hostname, port)
-    end
-
-    def write(buf)
-        #super(buf)
-        @sock.write(buf)
-    end
-end
-
 if __FILE__ == $0
     # debugging
 
-    out = UpgradeOutput.new
-    #out = UpgradeOutputSocket.new("localhost", 19003)
-    #out = UpgradeOutputSocket.new("192.168.1.1", 19003)
-    #out = UpgradeOutputSerial.new("/dev/tty.usbmodem1415")
+    #con = DUML::Connection.new
+    #con = DUML::ConnectionSocket.new("localhost", 19003)
+    #con = DUML::ConnectionSocket.new("192.168.1.1", 19003)
+    con = DUML::ConnectionSerial.new("/dev/tty.usbmodem1425")
 
-    #aircraft = Upgrade.new(connection: out)
-    #mavic_rc = Upgrade.new(dst: 0x2d, connection: out)
-    #googles =  Upgrade.new(dst: 0x3c, connection: out)
-    spark_rc = Upgrade.new(filename: "fw.tar", src: 0x02, dst: 0x1b, path: 1, ftp: false, connection: out)
-    spark_rc.go
+    #aircraft = Upgrade.new(connection: con)
+    mavic_rc = Upgrade.new(dst: 0x2d, connection: con)
+    mavic_rc.go
+    #googles =  Upgrade.new(dst: 0x3c, connection: con)
+    #spark_rc = Upgrade.new(filename: "fw.tar", src: 0x02, dst: 0x1b, path: 1, ftp: false, connection: con)
+    #spark_rc.go
+    sleep(120)
 end
 
 # vim: expandtab:ts=4:sw=4
