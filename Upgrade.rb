@@ -27,6 +27,7 @@ class Upgrade
     def init_upgrade
         @connection.write(@duml.cmd_enter_upgrade_mode())
         @connection.write(@duml.cmd_report_status())
+        @connection.write(@duml.cmd_upgrade_data(filesize: @data.length, path: @path, type: @type))
     end
 
     def ftp_transfer_file
@@ -40,8 +41,6 @@ class Upgrade
             puts "FTP Error"
         end
         ftp.close
-
-        @connection.write(@duml.cmd_upgrade_data(filesize: @data.length, path: @path, type: @type))
     end
 
     def duml_transfer_file
