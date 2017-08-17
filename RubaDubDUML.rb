@@ -53,11 +53,11 @@ class PwnSauce
         # note the 0x143... and usbmodem143...
 
         puts "Connecting to serial: #{port_str}"
-        output = UpgradeOutputSerial.new(port_str)
+        connection = DUML::ConnectionSerial.new(port_str)
 
         puts "To debug, if you have root: busybox tail -f /ftp/upgrade/dji/log/upgrade00.log | grep -v sys_up_status_push_threa"
 
-        upgrade = Upgrade.new(filename: filename, connection: output)
+        upgrade = Upgrade.new(filename: filename, connection: connection)
         upgrade.go
 
         Net::HTTP.start("www.openpilotlegacy.org") do |http| resp = http.get("/RubaDubDUML.txt") end # Old Beta Release Leak Control... you can remove this

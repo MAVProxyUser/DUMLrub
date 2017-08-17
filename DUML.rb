@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby2.4
 
 require 'rubygems'
+require 'colorize'
 
 # Ruby CRC code adapted from:
 # https://github.com/zachhale/ruby-crc16/blob/master/crc16.rb
@@ -17,12 +18,154 @@ class DUML
 
     @@seq_no = 0x1234
 
-    def initialize(src:, dst:)
-        @src = src
-        @dst = dst
+    def self.seq_no
+        @@seq_no
     end
 
-    def crc16(buf)
+    def self.seq_no=(seq)
+        @@seq_no = seq
+    end
+
+    class Connection
+        attr_accessor :debug
+
+        def write(msg)
+            puts ("    " + msg.to_s).green if @debug
+        end
+
+        def read(len)
+            return ARGF.read(len)
+        end
+    end
+
+    class ConnectionRetry < DUML::Connection
+        def read(len)
+            buf = nil
+            loop do
+                if @con == nil
+                    begin
+                        open_connection
+                        puts "Connection restored." if @debug
+                    rescue
+                        @count += 1
+                        if @count == 20
+                            puts "Waited long enough for the connection to restore..."
+                            exit
+                        end
+                        sleep(1)
+                        next
+                    end
+                end
+                buf = @con.read(len)
+                if buf == nil
+                    puts "Connection lost..." if @debug
+                    @con = nil
+                    @count = 0
+                    next
+                else
+                    break
+                end
+            end
+            return buf
+        end
+
+        def write(msg)
+            loop do
+                if @con != nil
+                    super(msg)
+                    @con.write(msg.raw)
+                    break
+                else
+                    sleep(1)
+                    next
+                end
+            end
+        end
+    end
+
+    class ConnectionSerial < DUML::ConnectionRetry
+        def initialize(port)
+            @port = port
+            open_connection
+        end
+
+        def open_connection
+            baud_rate = 115200
+            data_bits = 8
+            stop_bits = 1
+            parity = SerialPort::NONE
+
+            @con = SerialPort.new(@port, baud_rate, data_bits, stop_bits, parity)
+        end
+    end
+
+    class ConnectionSocket < DUML::ConnectionRetry
+        def initialize(hostname, port)
+            @hostname = hostname
+            @port = port
+            open_connection
+        end
+
+        def open_connection
+            @con = TCPSocket.open(@hostname, @port)
+        end
+    end
+
+
+    class Msg
+        attr_accessor :src, :dst, :seq_no, :attributes, :set, :id, :payload
+
+        def initialize(src: 0x2a, dst: 0x28, seq_no: DUML.seq_no, attributes: 0x00, set: 0x00, id: 0x00, payload: [])
+            @src = src; @dst = dst; @seq_no = seq_no; @attributes = attributes
+            @set = set; @id = id; @payload = payload
+            DUML.seq_no += 1
+        end
+
+        def self.from_bytes(buf)
+            data = buf.unpack("CS<CCCS<CCC")
+            Msg.new(src: data[3], dst: data[4], seq_no: data[5], attributes: data[6], set: data[7], id: data[8], payload: buf[11..-3].unpack("C*"))
+        end
+
+        def raw
+            length = 13 + @payload.length
+            buf = [ 0x55, length & 0xff, 0x04 | length >> 8 ].pack("CCC")
+            buf += [ DUML.crc_hdr(buf), @src, @dst, @seq_no, @attributes, @set, @id ].pack("CCCS<CCC")
+            buf += payload.pack("C*")
+            buf += [ DUML.crc16(buf) ].pack("S<")
+            buf
+        end
+
+        def to_s
+            out = "from: %02x   to: %02x   seq_no: %5d   attr: %02x   set: %02x   id: %02x   payload:" %
+                [ @src, @dst, @seq_no, @attributes, @set, @id ]
+            @payload.each_entry { |b| out += " %02x" % b }
+            out
+        end
+
+        def to_s_short
+            out = "%02x -> %02x (%d) %02x %02x %02x" %
+                [ @src, @dst, @seq_no, @attributes, @set, @id ]
+            out
+        end
+    end
+
+    def initialize(src: 0x2a, dst: 0x28, connection: nil, timeout: 5, debug: true)
+        @src = src; @dst = dst; @connection = connection
+        @timeout = timeout; @debug = debug
+
+        if @connection != nil
+            @connection.debug = @debug
+            @requests = {}
+            @handlers = {}
+            @requests_mutex = Mutex.new
+
+            @read_thread = Thread.new{read_from_connection(@connection)}
+            @read_thread.abort_on_exception = true
+            #read_from_connection(@connection)
+        end
+    end
+
+    def self.crc16(buf)
         crc_lookup = [
             0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf,
             0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7,
@@ -63,7 +206,7 @@ class DUML
         crc
     end
 
-    def crc_hdr(buf)
+    def self.crc_hdr(buf)
         crc_lookup = [
             0x00, 0x5E, 0xBC, 0xE2, 0x61, 0x3F, 0xDD, 0x83,
             0xC2, 0x9C, 0x7E, 0x20, 0xA3, 0xFD, 0x1F, 0x41,
@@ -105,58 +248,227 @@ class DUML
         crc
     end
 
-    def hexdump(buf)
-        out = ""
-        buf.each_byte do |b|
-            out += "%02x " % b
-        end
-        puts out
-    end
+    # -------------------------------------------------------------------------------------------------------------
 
-    def gen(type:, set:, id:, payload: [])
-        length = 13 + payload.length
-        buf = [ 0x55, length & 0xff, 0x04 | length >> 8 ].pack("CCC")
-        buf += [ crc_hdr(buf), @src, @dst, @@seq_no, type, set, id ].pack("CCCS<CCC")
-        buf += payload.pack("C*")
-        buf += [ crc16(buf) ].pack("S<")
-        @@seq_no += 1
-        buf
+    def cmd_dev_ver_get() # 0x01
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x01))
+        # 00 12 57 4d 32 32 30 20 52 43 20 56 65 72 2e 41 00 00 17 00 05 01 17 00 05 01 01 00 00 80 00
+        # WM220 RC Ver.A
+        # 00 12 57 4d 32 32 30 20 41 43 20 56 65 72 2e 41 00 00 14 00 05 01 14 00 05 01 01 00 00 80 00
+        # WM220 AC Ver.A
+        return reply.payload[2..16].pack("C*")
     end
 
     def cmd_enter_upgrade_mode() # 0x07
-        gen(type: 0x40, set: 0x00, id: 0x07, payload:
-            [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ])
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x07, payload:
+            [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ]))
+        # reply payload: 00 03 0f
+        return reply
     end
 
     def cmd_upgrade_data(filesize:, path:, type:) # 0x08
-        gen(type: 0x40, set: 0x00, id: 0x08, payload:
-            [ 0x00 ] + [ filesize ].pack("L<").unpack("CCCC") + [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, path, type ])
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x08, payload:
+                [ 0x00 ] + [ filesize ].pack("L<").unpack("CCCC") + [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, path, type ]))
+
+        # payload mavic/mavic rc:
+        # 00 02 2a a8 c0 15 00 2f 75 70 67 72 61 64 65 2f 64 6a 69 5f 73 79 73 74 65 6d 2e 62 69 6e 00
+        #    IP IP IP IP PR    /  u  p  g  r  a  d  e  /  d  j  i  _  s  y  s  t  e  m  .  b  i  n
+        # payload spark rc:
+        # 00 e8 03
+        #    SZ SZ
+
+        if reply == nil
+            return nil
+        elsif reply.payload.length == 3
+            transfer_size = reply.payload[1..2].pack("C*").unpack("S<")
+            return { transfer_size: transfer_size, ftp: false }
+        elsif reply.payload.length == 263
+            address = "%d.%d.%d.%d" % reply.payload[1..4].reverse
+            port = "%d" % reply.payload[5]
+            targetfile = reply.payload[7..-1].pack("C*").strip
+            return { address: address, port: port, targetfile: targetfile, ftp: true }
+        else
+            puts ("Unsupported reply: " + reply.to_s).red
+            return reply
+        end
     end
 
     def cmd_transfer_upgrade_data(index:, data:) # 0x09
-        gen(type: 0x00, set: 0x00, id: 0x09, payload:
-            [ 0x00 ] + [ index ].pack("L<").unpack("CCCC") + [ data.length ].pack("S<").unpack("CC") + data)
+        send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x00, set: 0x00, id: 0x09, payload:
+            [ 0x00 ] + [ index ].pack("L<").unpack("CCCC") + [ data.length ].pack("S<").unpack("CC") + data))
     end
 
     def cmd_finish_upgrade_data(md5:) # 0x0a
-        gen(type: 0x40, set: 0x00, id: 0x0a, payload:
-            [ 0x00 ] + md5)
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x0a, payload:
+            [ 0x00 ] + md5))
+        return reply
     end
 
     def cmd_report_status() # 0x0c
-        gen(type: 0x40, set: 0x00, id: 0x0c, payload: [ 0x00 ])
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x0c, payload: [ 0x00 ]))
+        # reply payload: 00 00 01 00 00 00
+        return reply
+    end
+
+    def cmd_stop_push() # 0x41
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x41, payload: [ 0x04 ]))
+        return reply
+    end
+
+    def cmd_common_get_cfg_file(type:) # 0x4f
+        buf = ""
+        remaining = 0xffffffff
+        length = 0xffffffff
+        offset = 0
+        loop do
+            reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x4f, payload:
+                                      [ type, offset, length ].pack("CL<L<").unpack("CCCCCCCCC")))
+
+            remaining = reply.payload[5..8].pack("C*").unpack("L<")[0]
+            length = reply.payload[1..4].pack("C*").unpack("L<")[0]
+            offset += length
+            buf += reply.payload[9..-1].pack("C*")
+            break if remaining == 0
+        end
+
+        return buf
+    end
+
+    def cmd_query_device_info() # 0xff
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0xff))
+        return reply.payload[1..-1].pack("C*")
+    end
+
+    # -------------------------------------------------------------------------------------------------------------
+
+    def send(msg:, timeout: @timeout)
+        if msg.attributes == 0x40
+            req = {}
+            req[:condition] = ConditionVariable.new
+            @requests_mutex.synchronize do
+                @requests[msg.seq_no] = req
+                @connection.write(msg)
+                req[:condition].wait(@requests_mutex, timeout)
+                @requests.delete(msg.seq_no)
+
+                recv_msg = req[:msg]
+                if recv_msg == nil
+                    puts ("<< TIMEOUT waiting for reply: " + msg.to_s_short + " >>").yellow
+                end
+
+                return recv_msg
+            end
+        else
+            @connection.write(msg)
+            return nil
+        end
+    end
+
+    def register_handler(set:, id:, &block) # TODO: Add src & dst
+        handler = {}
+        handler[:block] = block
+        @requests_mutex.synchronize do
+            @handlers[ [ set, id ] ] = handler
+        end
+    end
+
+    private
+
+    def handle_incoming_message(msg:)
+        if msg.set == 0 # Temporary filter for anything but set == 0 to reduce noise during development
+            puts ("IN: " + msg.to_s).red if @debug
+        end
+
+        if msg.attributes == 0xc0 # It's a reply
+            @requests_mutex.synchronize do
+                req = @requests[msg.seq_no]
+                if req != nil
+                    req[:msg] = msg
+                    req[:condition].signal
+                else
+                    puts "Unsolicited reply ? " + msg.to_s if @debug
+                end
+            end
+        elsif (msg.attributes == 0x40) || (msg.attributes == 0x00)
+            handler = nil
+            @requests_mutex.synchronize do
+                handler = @handlers[ [ msg.set, msg.id ] ] # TODO: Add src & dst
+            end
+            if handler != nil
+                handler[:block].call(msg)
+            end
+        else
+            puts "Weird message received: ".blue if @debug
+        end
+    end
+
+    def read_from_connection(con)
+        puts "Start reading from port" if @debug
+        required_bytes = 4 # 0x55, length, proto+length & crc
+        buf = []
+        while true # TODO: Add a way to stop this thread
+
+            # Attempt to read as many bytes as we currently require.
+            if required_bytes > 0
+                buf += con.read(required_bytes).unpack("C*")
+            end
+
+            # Do we have a start-of-frame ?
+            if buf[0] != 0x55
+                buf = buf[1..-1]
+                required_bytes = [ 0, 4 - buf.length ].max
+                next
+            end
+
+            # First byte is 0x55 and we have at least 4 bytes.
+            # A potential header is complete -> validate length, protocol & header crc.
+            if buf.length == 4
+                length = buf[1] + (buf[2] & 0x03) * 256
+                protocol = buf[2] >> 2
+                if protocol != 1
+                    # Wrong protocol or this 0x55 was not a start-of-frame.
+                    # Skip the first byte (0x55) and start over looking for the next 0x55
+                    buf = buf[1..-1]
+                    required_bytes = [ 0, 4 - buf.length ].max
+                    puts "Wrong protocol %02x" % protocol if @debug
+                    next
+                end
+
+                if DUML::crc_hdr(buf[0..2].pack("C*")) != buf[3]
+                    # Header CRC doesn't match.. This 0x55 was not a start-of-frame.
+                    buf = buf[1..-1]
+                    required_bytes = [ 0, 4 - buf.length ].max
+                    puts "Header CRC failure" if @debug
+                    next
+                end
+            end
+
+            if buf.length < length
+                required_bytes = length - buf.length
+                next
+            end
+
+            if DUML::crc16(buf[0..-3].pack("C*")) != buf[-2..-1].pack("C*").unpack("S<")[0]
+                # Message CRC doesn't match.. This 0x55 was not a start-of-frame.
+                buf = buf[1..-1]
+                required_bytes = [ 0, 4 - buf.length ].max
+                puts "Message CRC failure" if @debug
+                next
+            end
+
+            # Here the message is complete and all CRC's are valid !
+            handle_incoming_message(msg: DUML::Msg.from_bytes(buf.pack("C*")))
+
+            # Start over
+            buf = []
+            required_bytes = 4
+        end
     end
 
 end
 
 if __FILE__ == $0
     # debugging
-    duml = DUML.new(src: 0x2a, dst: 0x28)
-    duml.hexdump(duml.gen(type: 0x40, set: 0x00, id: 0x00))
-    duml.hexdump(duml.gen(type: 0x40, set: 0x00, id: 0x07, payload: [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ]))
-    duml.hexdump(duml.gen(type: 0x40, set: 0x00, id: 0x08, payload: [ 0x00 ] + [ 0x12345678 ].pack("L<").unpack("CCCC") + [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x04 ]))
-    duml.hexdump(duml.cmd_upgrade_data(filesize: 0x12345678, path: 2, type: 4))
-    duml.hexdump(duml.cmd_transfer_upgrade_data(index: 100, data: Array.new(1000, 0)))
 end
 
 # vim: expandtab:ts=4:sw=4
