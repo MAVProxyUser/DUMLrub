@@ -302,6 +302,11 @@ class DUML
         return reply
     end
 
+    def cmd_stop_push() # 0x41
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x41, payload: [ 0x04 ]))
+        return reply
+    end
+
     # -------------------------------------------------------------------------------------------------------------
 
     def send(msg:, timeout: @timeout)
