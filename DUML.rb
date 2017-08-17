@@ -248,13 +248,6 @@ class DUML
         crc
     end
 
-    def hexdump(buf)
-        out = ""
-        buf.each_byte do |b|
-            out += "%02x " % b
-        end
-        puts out
-    end
 
 
     def cmd_enter_upgrade_mode() # 0x07
@@ -408,20 +401,6 @@ end
 
 if __FILE__ == $0
     # debugging
-    duml = DUML.new(src: 0x2a, dst: 0x28)
-    duml.hexdump(DUML::Msg.new(attributes: 0x40, set: 0x00, id: 0x00).raw)
-    duml.hexdump(DUML::Msg.new(attributes: 0x40, set: 0x00, id: 0x07, payload: [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ]).raw)
-    duml.hexdump(DUML::Msg.new(attributes: 0x40, set: 0x00, id: 0x08, payload: [ 0x00 ] + [ 0x12345678 ].pack("L<").unpack("CCCC") + [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x04 ]).raw)
-    duml.hexdump(duml.cmd_upgrade_data(filesize: 0x12345678, path: 2, type: 4).raw)
-    duml.hexdump(duml.cmd_transfer_upgrade_data(index: 100, data: Array.new(1000, 0)).raw)
-    puts duml.cmd_transfer_upgrade_data(index: 100, data: Array.new(1000, 0))
-    duml.hexdump(duml.cmd_dev_ping(dst: 0x1f).raw)
-    duml.hexdump(duml.cmd_dev_ping().raw)
-    msg = duml.cmd_upgrade_data(filesize: 0x12345678, path: 2, type: 4).raw
-    duml.hexdump(msg)
-    msg2 = DUML::Msg.from_bytes(msg)
-    duml.hexdump(msg2.raw)
-    puts msg2
 end
 
 # vim: expandtab:ts=4:sw=4
