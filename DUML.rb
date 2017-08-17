@@ -27,8 +27,10 @@ class DUML
     end
 
     class Connection
+        attr_accessor :debug
+
         def write(msg)
-            puts ("    " + msg.to_s).green
+            puts ("    " + msg.to_s).green if @debug
         end
 
         def read(len)
@@ -36,41 +38,79 @@ class DUML
         end
     end
 
-    class ConnectionSerial < DUML::Connection
+    class ConnectionRetry < DUML::Connection
+        def read(len)
+            buf = nil
+            loop do
+                if @con == nil
+                    begin
+                        open_connection
+                        puts "Connection restored." if @debug
+                    rescue
+                        @count += 1
+                        if @count == 20
+                            puts "Waited long enough for the connection to restore..."
+                            exit
+                        end
+                        sleep(1)
+                        next
+                    end
+                end
+                buf = @con.read(len)
+                if buf == nil
+                    puts "Connection lost..." if @debug
+                    @con = nil
+                    @count = 0
+                    next
+                else
+                    break
+                end
+            end
+            return buf
+        end
+
+        def write(msg)
+            loop do
+                if @con != nil
+                    super(msg)
+                    @con.write(msg.raw)
+                    break
+                else
+                    sleep(1)
+                    next
+                end
+            end
+        end
+    end
+
+    class ConnectionSerial < DUML::ConnectionRetry
         def initialize(port)
+            @port = port
+            open_connection
+        end
+
+        def open_connection
             baud_rate = 115200
             data_bits = 8
             stop_bits = 1
             parity = SerialPort::NONE
 
-            @sp = SerialPort.new(port, baud_rate, data_bits, stop_bits, parity)
-        end
-
-        def read(len)
-            return @sp.read(len)
-        end
-
-        def write(msg)
-            super(msg)
-            @sp.write(msg.raw)
-            sleep(0.5) # Sleep for now, should wait for reply when applicable
+            @con = SerialPort.new(@port, baud_rate, data_bits, stop_bits, parity)
         end
     end
 
-    class ConnectionSocket < DUML::Connection
+    class ConnectionSocket < DUML::ConnectionRetry
         def initialize(hostname, port)
-            @sock = TCPSocket.open(hostname, port)
+            @hostname = hostname
+            @port = port
+            open_connection
         end
 
-        def read(len)
-            return @sock.read(len)
-        end
-
-        def write(msg)
-            #super(msg)
-            @sock.write(msg.raw)
+        def open_connection
+            @con = TCPSocket.open(@hostname, @port)
         end
     end
+
 
     class Msg
         attr_accessor :src, :dst, :seq_no, :attributes, :set, :id, :payload
@@ -101,15 +141,22 @@ class DUML
             @payload.each_entry { |b| out += " %02x" % b }
             out
         end
+
+        def to_s_short
+            out = "%02x -> %02x (%d) %02x %02x %02x" %
+                [ @src, @dst, @seq_no, @attributes, @set, @id ]
+            out
+        end
     end
 
-    def initialize(src: 0x2a, dst: 0x28, connection: nil)
-        @src = src
-        @dst = dst
-        @connection = connection
+    def initialize(src: 0x2a, dst: 0x28, connection: nil, timeout: 5, debug: true)
+        @src = src; @dst = dst; @connection = connection
+        @timeout = timeout; @debug = debug
 
         if @connection != nil
+            @connection.debug = @debug
             @requests = {}
+            @handlers = {}
             @requests_mutex = Mutex.new
 
             @read_thread = Thread.new{read_from_connection(@connection)}
@@ -232,52 +279,70 @@ class DUML
 
     def cmd_report_status() # 0x0c
         Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x0c, payload: [ 0x00 ])
+
+    def send(msg:, timeout: @timeout)
+        if msg.attributes == 0x40
+            req = {}
+            req[:condition] = ConditionVariable.new
+            @requests_mutex.synchronize do
+                @requests[msg.seq_no] = req
+                @connection.write(msg)
+                req[:condition].wait(@requests_mutex, timeout)
+                @requests.delete(msg.seq_no)
+
+                recv_msg = req[:msg]
+                if recv_msg == nil
+                    puts ("<< TIMEOUT waiting for reply: " + msg.to_s_short + " >>").yellow
+                end
+
+                return recv_msg
+            end
+        else
+            @connection.write(msg)
+            return nil
+        end
+    end
+
+    def register_handler(set:, id:, &block) # TODO: Add src & dst
+        handler = {}
+        handler[:block] = block
+        @requests_mutex.synchronize do
+            @handlers[ [ set, id ] ] = handler
+        end
     end
 
     private
 
     def handle_incoming_message(msg:)
+        if msg.set == 0 # Temporary filter for anything but set == 0 to reduce noise during development
+            puts ("IN: " + msg.to_s).red if @debug
+        end
+
         if msg.attributes == 0xc0 # It's a reply
             @requests_mutex.synchronize do
                 req = @requests[msg.seq_no]
                 if req != nil
                     req[:msg] = msg
                     req[:condition].signal
-                # TODO: Since the handlers are not yet registered, every reply seems unsolicited
-                #else
-                #    puts "Unsolicited reply ?"
+                else
+                    puts "Unsolicited reply ? " + msg.to_s if @debug
                 end
             end
-        end
-
-        # TODO: Add the possibilty to register handlers for received requests
-
-        if msg.set != 0 # Temporary filter for anything but set == 0 to reduce noise during development
-            return
-        end
-        puts ("IN: " + msg.to_s).red
-    end
-
-    # TODO: Define proper arguments
-    def cmd(src:, dst:, set:, id:, payload: [])
-        req = {}
-        req[:condition] = Condition.new
-        seq_no = 0 # TODO
-        @requests_mutex.synchonize do
-            @requests[seq_no] = req
-            # TODO: send command
-            # TODO: add timeouts
-            req[:condition].wait(@requests_mutex)
-            # TODO: test for timeout
-            @requests.delete(seq_no)
-            msg = req[:msg]
-            puts " COMPLETE: " + msg.to_s
-            return msg
+        elsif (msg.attributes == 0x40) || (msg.attributes == 0x00)
+            handler = nil
+            @requests_mutex.synchronize do
+                handler = @handlers[ [ msg.set, msg.id ] ] # TODO: Add src & dst
+            end
+            if handler != nil
+                handler[:block].call(msg)
+            end
+        else
+            puts "Weird message received: ".blue if @debug
         end
     end
 
     def read_from_connection(con)
-        puts "Start reading from port"
+        puts "Start reading from port" if @debug
         required_bytes = 4 # 0x55, length, proto+length & crc
         buf = []
         while true # TODO: Add a way to stop this thread
@@ -304,7 +369,7 @@ class DUML
                     # Skip the first byte (0x55) and start over looking for the next 0x55
                     buf = buf[1..-1]
                     required_bytes = [ 0, 4 - buf.length ].max
-                    puts "Wrong protocol %02x" % protocol
+                    puts "Wrong protocol %02x" % protocol if @debug
                     next
                 end
 
@@ -312,7 +377,7 @@ class DUML
                     # Header CRC doesn't match.. This 0x55 was not a start-of-frame.
                     buf = buf[1..-1]
                     required_bytes = [ 0, 4 - buf.length ].max
-                    puts "Header CRC failure"
+                    puts "Header CRC failure" if @debug
                     next
                 end
             end
@@ -326,7 +391,7 @@ class DUML
                 # Message CRC doesn't match.. This 0x55 was not a start-of-frame.
                 buf = buf[1..-1]
                 required_bytes = [ 0, 4 - buf.length ].max
-                puts "Message CRC failure"
+                puts "Message CRC failure" if @debug
                 next
             end
 
