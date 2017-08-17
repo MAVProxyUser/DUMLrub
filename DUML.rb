@@ -250,6 +250,14 @@ class DUML
 
     # -------------------------------------------------------------------------------------------------------------
 
+    def cmd_dev_ver_get() # 0x01
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x01))
+        # 00 12 57 4d 32 32 30 20 52 43 20 56 65 72 2e 41 00 00 17 00 05 01 17 00 05 01 01 00 00 80 00
+        # WM220 RC Ver.A
+        # 00 12 57 4d 32 32 30 20 41 43 20 56 65 72 2e 41 00 00 14 00 05 01 14 00 05 01 01 00 00 80 00
+        # WM220 AC Ver.A
+        return reply.payload[2..16].pack("C*")
+    end
 
     def cmd_enter_upgrade_mode() # 0x07
         reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x07, payload:
