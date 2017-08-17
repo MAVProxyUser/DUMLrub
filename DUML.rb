@@ -248,30 +248,39 @@ class DUML
         crc
     end
 
+    # -------------------------------------------------------------------------------------------------------------
 
 
     def cmd_enter_upgrade_mode() # 0x07
-        Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x07, payload:
-            [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ])
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x07, payload:
+            [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ]))
+        # reply payload: 00 03 0f
+        return reply
     end
 
     def cmd_upgrade_data(filesize:, path:, type:) # 0x08
-        Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x08, payload:
-                [ 0x00 ] + [ filesize ].pack("L<").unpack("CCCC") + [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, path, type ])
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x08, payload:
+                [ 0x00 ] + [ filesize ].pack("L<").unpack("CCCC") + [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, path, type ]))
     end
 
     def cmd_transfer_upgrade_data(index:, data:) # 0x09
-        Msg.new(src: @src, dst: @dst, attributes: 0x00, set: 0x00, id: 0x09, payload:
-            [ 0x00 ] + [ index ].pack("L<").unpack("CCCC") + [ data.length ].pack("S<").unpack("CC") + data)
+        send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x00, set: 0x00, id: 0x09, payload:
+            [ 0x00 ] + [ index ].pack("L<").unpack("CCCC") + [ data.length ].pack("S<").unpack("CC") + data))
     end
 
     def cmd_finish_upgrade_data(md5:) # 0x0a
-        Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x0a, payload:
-            [ 0x00 ] + md5)
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x0a, payload:
+            [ 0x00 ] + md5))
+        return reply
     end
 
     def cmd_report_status() # 0x0c
-        Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x0c, payload: [ 0x00 ])
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x0c, payload: [ 0x00 ]))
+        # reply payload: 00 00 01 00 00 00
+        return reply
+    end
+
+    # -------------------------------------------------------------------------------------------------------------
 
     def send(msg:, timeout: @timeout)
         if msg.attributes == 0x40
