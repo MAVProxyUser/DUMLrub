@@ -261,6 +261,28 @@ class DUML
     def cmd_upgrade_data(filesize:, path:, type:) # 0x08
         reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x08, payload:
                 [ 0x00 ] + [ filesize ].pack("L<").unpack("CCCC") + [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, path, type ]))
+
+        # payload mavic/mavic rc:
+        # 00 02 2a a8 c0 15 00 2f 75 70 67 72 61 64 65 2f 64 6a 69 5f 73 79 73 74 65 6d 2e 62 69 6e 00
+        #    IP IP IP IP PR    /  u  p  g  r  a  d  e  /  d  j  i  _  s  y  s  t  e  m  .  b  i  n
+        # payload spark rc:
+        # 00 e8 03
+        #    SZ SZ
+
+        if reply == nil
+            return nil
+        elsif reply.payload.length == 3
+            transfer_size = reply.payload[1..2].pack("C*").unpack("S<")
+            return { transfer_size: transfer_size, ftp: false }
+        elsif reply.payload.length == 263
+            address = "%d.%d.%d.%d" % reply.payload[1..4].reverse
+            port = "%d" % reply.payload[5]
+            targetfile = reply.payload[7..-1].pack("C*").strip
+            return { address: address, port: port, targetfile: targetfile, ftp: true }
+        else
+            puts ("Unsupported reply: " + reply.to_s).red
+            return reply
+        end
     end
 
     def cmd_transfer_upgrade_data(index:, data:) # 0x09
