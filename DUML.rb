@@ -315,6 +315,25 @@ class DUML
         return reply
     end
 
+    def cmd_common_get_cfg_file(type:) # 0x4f
+        buf = ""
+        remaining = 0xffffffff
+        length = 0xffffffff
+        offset = 0
+        loop do
+            reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x4f, payload:
+                                      [ type, offset, length ].pack("CL<L<").unpack("CCCCCCCCC")))
+
+            remaining = reply.payload[5..8].pack("C*").unpack("L<")[0]
+            length = reply.payload[1..4].pack("C*").unpack("L<")[0]
+            offset += length
+            buf += reply.payload[9..-1].pack("C*")
+            break if remaining == 0
+        end
+
+        return buf
+    end
+
     def cmd_query_device_info() # 0xff
         reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0xff))
         return reply.payload[1..-1].pack("C*")
