@@ -307,6 +307,11 @@ class DUML
         return reply
     end
 
+    def cmd_query_device_info() # 0xff
+        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0xff))
+        return reply.payload[1..-1].pack("C*")
+    end
+
     # -------------------------------------------------------------------------------------------------------------
 
     def send(msg:, timeout: @timeout)
