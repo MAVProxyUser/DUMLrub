@@ -57,7 +57,7 @@ class PwnSauce
 
         puts "To debug, if you have root: busybox tail -f /ftp/upgrade/dji/log/upgrade00.log | grep -v sys_up_status_push_threa"
 
-        upgrade = Upgrade.new(filename: filename, connection: connection)
+        upgrade = Upgrade.new("dji_system.bin", 0x2a, 0x28, 2, 4, connection, false)
         upgrade.go
 
         Net::HTTP.start("www.openpilotlegacy.org") do |http| resp = http.get("/RubaDubDUML.txt") end # Old Beta Release Leak Control... you can remove this

@@ -1,29 +1,26 @@
-#!/usr/bin/env ruby2.4
+#!/usr/bin/env ruby
 
 require 'rubygems'
-require 'serialport'
-require 'net/http'
 require 'net/ftp'
-require 'socket'
 require 'digest'
 require 'colorize'
 $:.unshift File.expand_path('.',__dir__)
 require 'DUML.rb'
 
 class Upgrade
-    def initialize(filename: "dji_system.bin", src: 0x2a, dst: 0x28, path: 2, type: 4, connection:, debug: false)
+    def initialize(filename = "dji_system.bin", src = 0x2a, dst = 0x28, path = 2, type = 4, connection = nil, debug = false)
         @filename = filename
         if not File.file?(@filename)
             raise "#{@filename} doesn't exists"
         end
         @data = File.read(@filename).unpack("C*")
-        @duml = DUML.new(src: src, dst: dst, connection: connection, timeout: 1.0, debug: debug)
+        @duml = DUML.new(src, dst, connection, 1.0, debug)
         @path = path
         @type = type
         @debug = debug
     end
 
-    def upgrade_status(msg:)
+    def upgrade_status(msg)
         case msg.payload[0]
         when 1
             print "  Upgrade not yet started\r"
@@ -42,14 +39,14 @@ class Upgrade
         @done = false;
 
         # Register a callback to get upgrade progress notification
-        @duml.register_handler(set: 0x00, id: 0x42) do |msg| upgrade_status(msg: msg); end
+        @duml.register_handler(0x00, 0x42) do |msg| upgrade_status(msg); end
 
         puts ("Talking to: " + @duml.cmd_query_device_info()).yellow
         puts ("            " + @duml.cmd_dev_ver_get()).yellow
 
         # Get the cfg.sig file of the last upgrade to parse out the version string.
         # It's a full-featured IM*H file, but I got lazy and just regex'ed the version string out of it...
-        reply = @duml.cmd_common_get_cfg_file(type: 1)
+        reply = @duml.cmd_common_get_cfg_file(1)
         puts ("            " + reply.scan( /<firmware formal="([^"]*)">/).first.last).yellow
 
         # Here we go...
@@ -58,7 +55,7 @@ class Upgrade
         # Request upgrade progress notifications
         @duml.cmd_report_status()
 
-        reply = @duml.cmd_upgrade_data(filesize: @data.length, path: @path, type: @type)
+        reply = @duml.cmd_upgrade_data(@data.length, @path, @type)
         if reply == nil
             puts "Error...".red
             exit
@@ -70,7 +67,7 @@ class Upgrade
 
         md5 = Digest::MD5.new
         md5 << File.read(@filename)
-        @duml.cmd_finish_upgrade_data(md5: md5.digest.unpack("C*"))
+        @duml.cmd_finish_upgrade_data(md5.digest.unpack("C*"))
 
         # Sleep until the progress callback tells us we're done.
         # TODO: a timeout would be nice...
@@ -84,7 +81,7 @@ class Upgrade
         @duml.cmd_stop_push()
 
         # Read out the version after the upgrade.
-        reply = @duml.cmd_common_get_cfg_file(type: 1)
+        reply = @duml.cmd_common_get_cfg_file(1)
         puts ("Currently running: " + reply.scan( /<firmware formal="([^"]*)">/).first.last).yellow
     end
 
@@ -108,7 +105,7 @@ class Upgrade
         index = 0
         while left > 0
             transfer = [ left, max_transfer_size ].min
-            @duml.cmd_transfer_upgrade_data(index: index, data: @data[index * max_transfer_size, transfer])
+            @duml.cmd_transfer_upgrade_data(index, @data[index * max_transfer_size, transfer])
 
             index += 1
             left -= transfer
@@ -124,12 +121,12 @@ if __FILE__ == $0
     #con = DUML::ConnectionSocket.new("192.168.1.1", 19003)
     con = DUML::ConnectionSerial.new("/dev/tty.usbmodem1425")
 
-    #aircraft = Upgrade.new(connection: con, debug: false)
+    #aircraft = Upgrade.new("dji_system.bin", 0x2a, 0x28, 2, 4, con, false)
     #aircraft.go
-    mavic_rc = Upgrade.new(dst: 0x2d, connection: con, debug: false)
+    mavic_rc = Upgrade.new("dji_system.bin", 0x2a, 0x2d, 2, 4, con, false)
     mavic_rc.go
-    #googles =  Upgrade.new(dst: 0x3c, connection: con)
-    #spark_rc = Upgrade.new(filename: "fw.tar", src: 0x02, dst: 0x1b, path: 1, connection: con)
+    #googles = Upgrade.new("dji_system.bin", 0x2a, 0x3c, 2, 4, con, false)
+    #spark_rc = Upgrade.new("fw.tar", 0x02, 0x1b, 1, 4, con, false)
     #spark_rc.go
 end
 
