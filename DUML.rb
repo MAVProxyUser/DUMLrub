@@ -1,7 +1,9 @@
-#!/usr/bin/env ruby2.4
+#!/usr/bin/env ruby
 
 require 'rubygems'
 require 'colorize'
+require 'serialport'
+require 'socket'
 
 # Ruby CRC code adapted from:
 # https://github.com/zachhale/ruby-crc16/blob/master/crc16.rb
@@ -115,7 +117,7 @@ class DUML
     class Msg
         attr_accessor :src, :dst, :seq_no, :attributes, :set, :id, :payload
 
-        def initialize(src: 0x2a, dst: 0x28, seq_no: DUML.seq_no, attributes: 0x00, set: 0x00, id: 0x00, payload: [])
+        def initialize(src = 0x2a, dst = 0x28, attributes = 0x00, set = 0x00, id = 0x00, payload = [], seq_no = DUML.seq_no)
             @src = src; @dst = dst; @seq_no = seq_no; @attributes = attributes
             @set = set; @id = id; @payload = payload
             DUML.seq_no += 1
@@ -123,7 +125,7 @@ class DUML
 
         def self.from_bytes(buf)
             data = buf.unpack("CS<CCCS<CCC")
-            Msg.new(src: data[3], dst: data[4], seq_no: data[5], attributes: data[6], set: data[7], id: data[8], payload: buf[11..-3].unpack("C*"))
+            Msg.new(data[3], data[4], data[6], data[7], data[8], buf[11..-3].unpack("C*"), data[5])
         end
 
         def raw
@@ -149,7 +151,7 @@ class DUML
         end
     end
 
-    def initialize(src: 0x2a, dst: 0x28, connection: nil, timeout: 5, debug: true)
+    def initialize(src = 0x2a, dst = 0x28, connection = nil, timeout = 5, debug = true)
         @src = src; @dst = dst; @connection = connection
         @timeout = timeout; @debug = debug
 
@@ -251,7 +253,7 @@ class DUML
     # -------------------------------------------------------------------------------------------------------------
 
     def cmd_dev_ver_get() # 0x01
-        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x01))
+        reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0x01))
         # 00 12 57 4d 32 32 30 20 52 43 20 56 65 72 2e 41 00 00 17 00 05 01 17 00 05 01 01 00 00 80 00
         # WM220 RC Ver.A
         # 00 12 57 4d 32 32 30 20 41 43 20 56 65 72 2e 41 00 00 14 00 05 01 14 00 05 01 01 00 00 80 00
@@ -260,14 +262,14 @@ class DUML
     end
 
     def cmd_enter_upgrade_mode() # 0x07
-        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x07, payload:
+        reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0x07,
             [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ]))
         # reply payload: 00 03 0f
         return reply
     end
 
-    def cmd_upgrade_data(filesize:, path:, type:) # 0x08
-        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x08, payload:
+    def cmd_upgrade_data(filesize, path, type) # 0x08
+        reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0x08,
                 [ 0x00 ] + [ filesize ].pack("L<").unpack("CCCC") + [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, path, type ]))
 
         # payload mavic/mavic rc:
@@ -293,36 +295,36 @@ class DUML
         end
     end
 
-    def cmd_transfer_upgrade_data(index:, data:) # 0x09
-        send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x00, set: 0x00, id: 0x09, payload:
+    def cmd_transfer_upgrade_data(index, data) # 0x09
+        send(msg: Msg.new(@src, @dst, 0x00, 0x00, 0x09,
             [ 0x00 ] + [ index ].pack("L<").unpack("CCCC") + [ data.length ].pack("S<").unpack("CC") + data))
     end
 
-    def cmd_finish_upgrade_data(md5:) # 0x0a
-        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x0a, payload:
+    def cmd_finish_upgrade_data(md5) # 0x0a
+        reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0x0a,
             [ 0x00 ] + md5))
         return reply
     end
 
     def cmd_report_status() # 0x0c
-        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x0c, payload: [ 0x00 ]))
+        reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0x0c, [ 0x00 ]))
         # reply payload: 00 00 01 00 00 00
         return reply
     end
 
     def cmd_stop_push() # 0x41
-        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x41, payload: [ 0x04 ]))
+        reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0x41, [ 0x04 ]))
         return reply
     end
 
-    def cmd_common_get_cfg_file(type:) # 0x4f
+    def cmd_common_get_cfg_file(type) # 0x4f
         buf = ""
         remaining = 0xffffffff
         length = 0xffffffff
         offset = 0
         loop do
-            reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0x4f, payload:
-                                      [ type, offset, length ].pack("CL<L<").unpack("CCCCCCCCC")))
+            reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0x4f,
+                                 [ type, offset, length ].pack("CL<L<").unpack("CCCCCCCCC")))
 
             remaining = reply.payload[5..8].pack("C*").unpack("L<")[0]
             length = reply.payload[1..4].pack("C*").unpack("L<")[0]
@@ -335,13 +337,13 @@ class DUML
     end
 
     def cmd_query_device_info() # 0xff
-        reply = send(msg: Msg.new(src: @src, dst: @dst, attributes: 0x40, set: 0x00, id: 0xff))
+        reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0xff))
         return reply.payload[1..-1].pack("C*")
     end
 
     # -------------------------------------------------------------------------------------------------------------
 
-    def send(msg:, timeout: @timeout)
+    def send(msg, timeout = @timeout)
         if msg.attributes == 0x40
             req = {}
             req[:condition] = ConditionVariable.new
@@ -364,7 +366,7 @@ class DUML
         end
     end
 
-    def register_handler(set:, id:, &block) # TODO: Add src & dst
+    def register_handler(set, id, &block) # TODO: Add src & dst
         handler = {}
         handler[:block] = block
         @requests_mutex.synchronize do
@@ -374,7 +376,7 @@ class DUML
 
     private
 
-    def handle_incoming_message(msg:)
+    def handle_incoming_message(msg)
         if msg.set == 0 # Temporary filter for anything but set == 0 to reduce noise during development
             puts ("IN: " + msg.to_s).red if @debug
         end
@@ -457,7 +459,7 @@ class DUML
             end
 
             # Here the message is complete and all CRC's are valid !
-            handle_incoming_message(msg: DUML::Msg.from_bytes(buf.pack("C*")))
+            handle_incoming_message(DUML::Msg.from_bytes(buf.pack("C*")))
 
             # Start over
             buf = []
