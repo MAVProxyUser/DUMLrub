@@ -5,7 +5,7 @@ $:.unshift File.expand_path('.',__dir__)
 require 'DUML.rb'
 
 dst = 0x28 # Aircraft
-dst = 0x2d # RC
+#dst = 0x2d # RC
 
 con = DUML::ConnectionSerial.new("/dev/tty.usbmodem1425")
 @duml = DUML.new(0x2a, dst, con, 1.0, false)
