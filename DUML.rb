@@ -327,15 +327,16 @@ class DUML
         return reply
     end
 
-    def cmd_common_get_cfg_file(type) # 0x4f
+    def cmd_common_get_cfg_file(type, src = @src, dst = @dst, timeout = @timeout) # 0x4f
         buf = ""
         remaining = 0xffffffff
         length = 0xffffffff
         offset = 0
         loop do
-            reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0x4f,
-                                 [ type, offset, length ].pack("CL<L<").unpack("CCCCCCCCC")))
+            reply = send(Msg.new(src, dst, 0x40, 0x00, 0x4f,
+                                 [ type, offset, length ].pack("CL<L<").unpack("C*")), timeout)
 
+            break if reply == nil
             remaining = reply.payload[5..8].pack("C*").unpack("L<")[0]
             length = reply.payload[1..4].pack("C*").unpack("L<")[0]
             offset += length
