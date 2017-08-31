@@ -252,13 +252,23 @@ class DUML
 
     # -------------------------------------------------------------------------------------------------------------
 
-    def cmd_dev_ver_get() # 0x01
-        reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0x01))
+    def cmd_dev_ping(src = @src, dst = @dst, timeout = @timeout) # 0x00
+        reply = send(Msg.new(src, dst, 0x40, 0x00, 0x00), timeout)
+        return reply
+    end
+
+    def cmd_dev_ver_get(src = @src, dst = @dst, timeout = @timeout) # 0x01
+        reply = send(Msg.new(src, dst, 0x40, 0x00, 0x01), timeout)
         # 00 12 57 4d 32 32 30 20 52 43 20 56 65 72 2e 41 00 00 17 00 05 01 17 00 05 01 01 00 00 80 00
-        # WM220 RC Ver.A
+        # WM220 RC Ver.A                                        23  0  5  1 23  0  5  1  1  0  0 128 0
         # 00 12 57 4d 32 32 30 20 41 43 20 56 65 72 2e 41 00 00 14 00 05 01 14 00 05 01 01 00 00 80 00
-        # WM220 AC Ver.A
-        return reply.payload[2..16].pack("C*")
+        # WM220 AC Ver.A                                        20  0  5  1 20  0  5  1  1  0  0 128 0
+        if reply
+            ver = reply.payload[18..21]
+            return reply.payload[2..16].pack("C*") + ("  %02d.%02d.%02d.%02d" % [ ver[3], ver[2], ver[1], ver[0] ])
+        else
+            return nil
+        end
     end
 
     def cmd_enter_upgrade_mode() # 0x07
