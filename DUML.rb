@@ -27,6 +27,7 @@ class DUML
         end
 
         def read(len)
+            sleep(3600)
             return ARGF.read(len)
         end
     end
