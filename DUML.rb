@@ -352,9 +352,13 @@ class DUML
         return buf
     end
 
-    def cmd_query_device_info() # 0xff
-        reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0xff))
-        return reply.payload[1..-1].pack("C*")
+    def cmd_query_device_info(src = @src, dst = @dst, timeout = @timeout) # 0xff
+        reply = send(Msg.new(src, dst, 0x40, 0x00, 0xff), timeout)
+        if reply != nil
+            return reply.payload[1..-1].pack("C*")
+        else
+            return nil
+        end
     end
 
     # -------------------------------------------------------------------------------------------------------------
