@@ -271,7 +271,7 @@ class DUML
         return reply
     end
 
-    def cmd_upgrade_data(filesize, path, type) # 0x08
+    def cmd_upgrade_data(filesize, path = 0, type = 0) # 0x08
         reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0x08,
                 [ 0x00 ] + [ filesize ].pack("L<").unpack("CCCC") + [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, path, type ]))
 
@@ -298,9 +298,9 @@ class DUML
         end
     end
 
-    def cmd_transfer_upgrade_data(index, data) # 0x09
-        send(msg: Msg.new(@src, @dst, 0x00, 0x00, 0x09,
-            [ 0x00 ] + [ index ].pack("L<").unpack("CCCC") + [ data.length ].pack("S<").unpack("CC") + data))
+    def cmd_transfer_upgrade_data(index, data, enc = 0) # 0x09
+        send(Msg.new(@src, @dst, 0x40, 0x00, 0x09,
+            [ enc ] + [ index ].pack("L<").unpack("CCCC") + [ data.length ].pack("S<").unpack("CC") + data))
     end
 
     def cmd_finish_upgrade_data(md5) # 0x0a
