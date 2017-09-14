@@ -17,6 +17,7 @@ require 'socket'
 # https://github.com/mefistotelis/phantom-firmware-tools/issues/25#issuecomment-306052129
 
 class DUML
+    attr_accessor :src, :dst, :timeout, :debug
 
     class Connection
         attr_accessor :debug
