@@ -110,7 +110,26 @@ class DUML
 
         @@seq_no = 0x1234
 
-        def initialize(src = 0x2a, dst = 0x28, attributes = 0x00, set = 0x00, id = 0x00, payload = [], seq_no = @@seq_no)
+        def self.addr_to_hex(a)
+            if not a.is_a?(String)
+                return a
+            end
+            if a.length != 4
+                raise
+            end
+            return (a[0..1].to_i & 0x1f) | ((a[2..3].to_i & 0x07) << 5)
+        end
+
+        def self.addr_to_dec(a)
+            if a.is_a?(String)
+                return a
+            end
+            return "%02d%02d" % [ a & 0x1f, a >> 5 ]
+        end
+
+        def initialize(src = "1001", dst = "0801", attributes = 0x00, set = 0x00, id = 0x00, payload = [], seq_no = @@seq_no)
+            src = Msg.addr_to_hex(src)
+            dst = Msg.addr_to_hex(dst)
             @src = src; @dst = dst; @seq_no = seq_no; @attributes = attributes
             @set = set; @id = id; @payload = payload
             @@seq_no += 1
@@ -131,20 +150,20 @@ class DUML
         end
 
         def to_s
-            out = "from: %02x   to: %02x   seq_no: %5d   attr: %02x   set: %02x   id: %02x   payload:" %
-                [ @src, @dst, @seq_no, @attributes, @set, @id ]
+            out = "from: %s   to: %s   seq_no: %5d   attr: %02x   set: %02x   id: %02x   payload:" %
+                [ Msg.addr_to_dec(@src), Msg.addr_to_dec(@dst), @seq_no, @attributes, @set, @id ]
             @payload.each_entry { |b| out += " %02x" % b }
             out
         end
 
         def to_s_short
-            out = "%02x -> %02x (%d) %02x %02x %02x" %
-                [ @src, @dst, @seq_no, @attributes, @set, @id ]
+            out = "%s -> %s (%d) %02x %02x %02x" %
+                [ Msg.addr_to_dec(@src), Msg.addr_to_dec(@dst), @seq_no, @attributes, @set, @id ]
             out
         end
     end
 
-    def initialize(src = 0x2a, dst = 0x28, connection = nil, timeout = 5, debug = true)
+    def initialize(src = "1001", dst = "0801", connection = nil, timeout = 5, debug = true)
         @src = src; @dst = dst; @connection = connection
         @timeout = timeout; @debug = debug
 

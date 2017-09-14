@@ -11,16 +11,16 @@ if port == nil
 end
 
 con = DUML::ConnectionSerial.new(port)
-@duml = DUML.new(0x2a, 0x00, con, 5.0, false)
+@duml = DUML.new("1001", "0000", con, 5.0, false)
 
 # Probe for the correct device
-[0x28, 0x2d, 0x3c].each do |d|
-    if @duml.cmd_dev_ping(0x2a, d, 0.05) != nil
+["0801", "1301", "2801"].each do |d|
+    if @duml.cmd_dev_ping("1001", d, 0.05) != nil
         @duml.dst = d
         break
     end
 end
-puts "dst = 0x%02x" % @duml.dst
+puts "dst = %s" % @duml.dst
 
 reply = @duml.cmd_common_get_cfg_file(2)
 if reply && reply.length > 0
