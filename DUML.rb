@@ -359,7 +359,7 @@ class DUML
 
                 recv_msg = req[:msg]
                 if recv_msg == nil
-                    puts ("<< TIMEOUT waiting for reply: " + msg.to_s_short + " >>").yellow
+                    puts ("<< TIMEOUT waiting for reply: " + msg.to_s_short + " >>").yellow if @debug
                 end
 
                 return recv_msg
