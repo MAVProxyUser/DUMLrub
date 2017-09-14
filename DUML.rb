@@ -320,6 +320,18 @@ class DUML
         return reply
     end
 
+    def cmd_set_date(time, src = @src, dst = @dst, timeeout = @timeout) # 0x4a
+        t = [ time.year, time.month, time.day, time.hour, time.min, time.sec ]
+        reply = send(Msg.new(src, dst, 0x40, 0x00, 0x4a, t.pack("S<CCCCC").unpack("C*")), timeout)
+        return reply
+    end
+
+    def cmd_get_date() # 0x4b
+        # TODO: Parse the reply
+        reply = send(Msg.new(src, dst, 0x40, 0x00, 0x4b, [ 0x00 ]), timeout)
+        return reply
+    end
+
     def cmd_common_get_cfg_file(type, src = @src, dst = @dst, timeout = @timeout) # 0x4f
         buf = ""
         remaining = 0xffffffff
