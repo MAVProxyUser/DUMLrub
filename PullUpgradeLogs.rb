@@ -10,20 +10,19 @@ if port == nil
     exit
 end
 
-dst = 0x00
 con = DUML::ConnectionSerial.new(port)
-@duml = DUML.new(0x2a, dst, con, 5.0, false)
+@duml = DUML.new(0x2a, 0x00, con, 5.0, false)
 
 # Probe for the correct device
 [0x28, 0x2d, 0x3c].each do |d|
     if @duml.cmd_dev_ping(0x2a, d, 0.05) != nil
-        dst = d
+        @duml.dst = d
         break
     end
 end
-puts "dst = 0x%02x" % dst
+puts "dst = 0x%02x" % @duml.dst
 
-reply = @duml.cmd_common_get_cfg_file(2, 0x2a, dst)
+reply = @duml.cmd_common_get_cfg_file(2)
 if reply && reply.length > 0
     File.open("upgrade_logs.tar.gz", "w+") { |file| file.write(reply) }
     puts "Logs written to upgrade_logs.tar.gz"
