@@ -18,16 +18,6 @@ require 'socket'
 
 class DUML
 
-    @@seq_no = 0x1234
-
-    def self.seq_no
-        @@seq_no
-    end
-
-    def self.seq_no=(seq)
-        @@seq_no = seq
-    end
-
     class Connection
         attr_accessor :debug
 
@@ -117,10 +107,12 @@ class DUML
     class Msg
         attr_accessor :src, :dst, :seq_no, :attributes, :set, :id, :payload
 
-        def initialize(src = 0x2a, dst = 0x28, attributes = 0x00, set = 0x00, id = 0x00, payload = [], seq_no = DUML.seq_no)
+        @@seq_no = 0x1234
+
+        def initialize(src = 0x2a, dst = 0x28, attributes = 0x00, set = 0x00, id = 0x00, payload = [], seq_no = @@seq_no)
             @src = src; @dst = dst; @seq_no = seq_no; @attributes = attributes
             @set = set; @id = id; @payload = payload
-            DUML.seq_no += 1
+            @@seq_no += 1
         end
 
         def self.from_bytes(buf)
