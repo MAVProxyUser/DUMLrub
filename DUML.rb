@@ -385,7 +385,7 @@ class DUML
             puts ("IN: " + msg.to_s).red if @debug
         end
 
-        if msg.attributes == 0xc0 # It's a reply
+        if msg.attributes & 0x80 == 0x80 # It's a reply
             @requests_mutex.synchronize do
                 req = @requests[msg.seq_no]
                 if req != nil
