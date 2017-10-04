@@ -2,46 +2,27 @@
 
 require 'rubygems'
 require 'colorize'
+require 'json'
+require 'jsonable'
 $:.unshift File.expand_path('.',__dir__)
 require 'DUML.rb'
 
 class FlightController
-        
+
     class Param
         attr_accessor :table, :item, :type, :length, :default, :value, :min, :max, :name, :packing
 
+        @@packings = [ "C", "S<", "L<", "", "c", "s", "l<", "", "e" ]
+        @@types = [ "uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64", "float" ]
+
         def initialize(table, item, type, length, default, min, max, name)
-            @table = table
-            @item = item
-            @type = type
-            @length = length
-            @default = default
-            @value = default
-            @min = min
-            @max = max
-            @name = name
-        
-            case type
-            when 0
-                @packing = "C"
-            when 1
-                @packing = "S<"
-            when 2
-                @packing = "L<"
-            when 4
-                @packing = "c"
-            when 5
-                @packing = "s<"
-            when 6
-                @packing = "l<"
-            when 8
-                @packing = "e"
-            end
+            @table = table; @item = item; @type = type; @length = length
+            @default = default; @value = default; @min = min; @max = max
+            @name = name; @packing = @@packings[type]
         end
-        
+
         def to_s
-            types = [ "uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64", "float" ]  
-            out = "%d %4d  %-70s %-8s " % [ @table, @item, @name, types[@type] ]
+            out = "%d %4d  %-70s %-8s " % [ @table, @item, @name, @@types[@type] ]
             case type
             when 0..3
                 out += " %12u %12u %12u %12u" % [ @min, @max, @default, @value ]
@@ -52,6 +33,16 @@ class FlightController
             end
             out
         end
+
+        def to_json(a)
+            { 'table' => @table, 'item' => @item, 'type' => @@types[@type], 'default' => @default,
+              'value' => @value, 'min' => @min, 'max' => @max, 'name' => @name }.to_json
+        end
+
+        def self.from_json string
+            data = JSON.load string
+            self.new data['a'], data['b']
+        end
     end
 
     def initialize(duml = nil, debug = false)
@@ -60,7 +51,7 @@ class FlightController
         @timeout = 0.2
         @src = @duml.src
         @dst = '0300'
-    
+
         if debug
             # TODO: Add src & dst
             @duml.register_handler(0x00, 0x0e) do |msg| fc_status(msg); end
@@ -138,7 +129,7 @@ class FlightController
         if status != 0
             return nil
         end
-        
+
         #table, item  = reply.payload[2..5].pack("C*").unpack("S<S")
         param.value = reply.payload[6..-1].pack("C*").unpack(param.packing)
         return param
@@ -157,7 +148,7 @@ end
 
 if __FILE__ == $0
     # debugging
-    
+
     port = $*[0]
     if port == nil
         puts "Usage: FlightController.rb <serial port>"
@@ -168,15 +159,19 @@ if __FILE__ == $0
     duml = DUML.new(0x2a, 0xc3, con, 0.5, false)
     fc = FlightController.new(duml, false)
 
+    all = []
     [0, 1].each do |t|
         items = fc.fc_ask_table(t)
         puts "Table %d => %d items" % [t, items]
         (0..(items - 1)).each do |i|
             p = fc.fc_ask_param(t, i)
             fc.fc_get_param(p)
-            puts p
+            all = all + [ p ]
+            #puts "%d %d" % [ p.table, p.item ]
+            #puts p.to_json
         end
     end
+    puts JSON.pretty_generate(all)
 end
 
 # vim: expandtab:ts=4:sw=4
