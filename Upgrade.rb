@@ -115,7 +115,7 @@ class Upgrade
 end
 
 def upgrade_file_info(path)
-    f = File.new("tmpfiles/dji_system.bin")
+    f = File.new(path)
     t = Gem::Package::TarReader.new(f)
     t.each() do |entry|
         name = entry.full_name()
