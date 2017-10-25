@@ -17,16 +17,7 @@ require 'socket'
 # https://github.com/mefistotelis/phantom-firmware-tools/issues/25#issuecomment-306052129
 
 class DUML
-
-    @@seq_no = 0x1234
-
-    def self.seq_no
-        @@seq_no
-    end
-
-    def self.seq_no=(seq)
-        @@seq_no = seq
-    end
+    attr_accessor :src, :dst, :timeout, :debug
 
     class Connection
         attr_accessor :debug
@@ -36,6 +27,7 @@ class DUML
         end
 
         def read(len)
+            sleep(3600)
             return ARGF.read(len)
         end
     end
@@ -117,10 +109,31 @@ class DUML
     class Msg
         attr_accessor :src, :dst, :seq_no, :attributes, :set, :id, :payload
 
-        def initialize(src = 0x2a, dst = 0x28, attributes = 0x00, set = 0x00, id = 0x00, payload = [], seq_no = DUML.seq_no)
+        @@seq_no = 0x1234
+
+        def self.addr_to_hex(a)
+            if not a.is_a?(String)
+                return a
+            end
+            if a.length != 4
+                raise
+            end
+            return (a[0..1].to_i & 0x1f) | ((a[2..3].to_i & 0x07) << 5)
+        end
+
+        def self.addr_to_dec(a)
+            if a.is_a?(String)
+                return a
+            end
+            return "%02d%02d" % [ a & 0x1f, a >> 5 ]
+        end
+
+        def initialize(src = "1001", dst = "0801", attributes = 0x00, set = 0x00, id = 0x00, payload = [], seq_no = @@seq_no)
+            src = Msg.addr_to_hex(src)
+            dst = Msg.addr_to_hex(dst)
             @src = src; @dst = dst; @seq_no = seq_no; @attributes = attributes
             @set = set; @id = id; @payload = payload
-            DUML.seq_no += 1
+            @@seq_no += 1
         end
 
         def self.from_bytes(buf)
@@ -138,20 +151,20 @@ class DUML
         end
 
         def to_s
-            out = "from: %02x   to: %02x   seq_no: %5d   attr: %02x   set: %02x   id: %02x   payload:" %
-                [ @src, @dst, @seq_no, @attributes, @set, @id ]
+            out = "from: %s   to: %s   seq_no: %5d   attr: %02x   set: %02x   id: %02x   payload:" %
+                [ Msg.addr_to_dec(@src), Msg.addr_to_dec(@dst), @seq_no, @attributes, @set, @id ]
             @payload.each_entry { |b| out += " %02x" % b }
             out
         end
 
         def to_s_short
-            out = "%02x -> %02x (%d) %02x %02x %02x" %
-                [ @src, @dst, @seq_no, @attributes, @set, @id ]
+            out = "%s -> %s (%d) %02x %02x %02x" %
+                [ Msg.addr_to_dec(@src), Msg.addr_to_dec(@dst), @seq_no, @attributes, @set, @id ]
             out
         end
     end
 
-    def initialize(src = 0x2a, dst = 0x28, connection = nil, timeout = 5, debug = true)
+    def initialize(src = "1001", dst = "0801", connection = nil, timeout = 5, debug = true)
         @src = src; @dst = dst; @connection = connection
         @timeout = timeout; @debug = debug
 
@@ -252,13 +265,23 @@ class DUML
 
     # -------------------------------------------------------------------------------------------------------------
 
-    def cmd_dev_ver_get() # 0x01
-        reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0x01))
+    def cmd_dev_ping(src = @src, dst = @dst, timeout = @timeout) # 0x00
+        reply = send(Msg.new(src, dst, 0x40, 0x00, 0x00), timeout)
+        return reply
+    end
+
+    def cmd_dev_ver_get(src = @src, dst = @dst, timeout = @timeout) # 0x01
+        reply = send(Msg.new(src, dst, 0x40, 0x00, 0x01), timeout)
         # 00 12 57 4d 32 32 30 20 52 43 20 56 65 72 2e 41 00 00 17 00 05 01 17 00 05 01 01 00 00 80 00
-        # WM220 RC Ver.A
+        # WM220 RC Ver.A                                        23  0  5  1 23  0  5  1  1  0  0 128 0
         # 00 12 57 4d 32 32 30 20 41 43 20 56 65 72 2e 41 00 00 14 00 05 01 14 00 05 01 01 00 00 80 00
-        # WM220 AC Ver.A
-        return reply.payload[2..16].pack("C*")
+        # WM220 AC Ver.A                                        20  0  5  1 20  0  5  1  1  0  0 128 0
+        if reply
+            ver = reply.payload[18..21]
+            return reply.payload[2..16].pack("C*") + ("  %02d.%02d.%02d.%02d" % [ ver[3], ver[2], ver[1], ver[0] ])
+        else
+            return nil
+        end
     end
 
     def cmd_enter_upgrade_mode() # 0x07
@@ -268,7 +291,7 @@ class DUML
         return reply
     end
 
-    def cmd_upgrade_data(filesize, path, type) # 0x08
+    def cmd_upgrade_data(filesize, path = 0, type = 0) # 0x08
         reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0x08,
                 [ 0x00 ] + [ filesize ].pack("L<").unpack("CCCC") + [ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, path, type ]))
 
@@ -295,9 +318,9 @@ class DUML
         end
     end
 
-    def cmd_transfer_upgrade_data(index, data) # 0x09
-        send(msg: Msg.new(@src, @dst, 0x00, 0x00, 0x09,
-            [ 0x00 ] + [ index ].pack("L<").unpack("CCCC") + [ data.length ].pack("S<").unpack("CC") + data))
+    def cmd_transfer_upgrade_data(index, data, enc = 0) # 0x09
+        send(Msg.new(@src, @dst, 0x40, 0x00, 0x09,
+            [ enc ] + [ index ].pack("L<").unpack("CCCC") + [ data.length ].pack("S<").unpack("CC") + data))
     end
 
     def cmd_finish_upgrade_data(md5) # 0x0a
@@ -317,15 +340,28 @@ class DUML
         return reply
     end
 
-    def cmd_common_get_cfg_file(type) # 0x4f
+    def cmd_set_date(time, src = @src, dst = @dst, timeeout = @timeout) # 0x4a
+        t = [ time.year, time.month, time.day, time.hour, time.min, time.sec ]
+        reply = send(Msg.new(src, dst, 0x40, 0x00, 0x4a, t.pack("S<CCCCC").unpack("C*")), timeout)
+        return reply
+    end
+
+    def cmd_get_date() # 0x4b
+        # TODO: Parse the reply
+        reply = send(Msg.new(src, dst, 0x40, 0x00, 0x4b, [ 0x00 ]), timeout)
+        return reply
+    end
+
+    def cmd_common_get_cfg_file(type, src = @src, dst = @dst, timeout = @timeout) # 0x4f
         buf = ""
         remaining = 0xffffffff
         length = 0xffffffff
         offset = 0
         loop do
-            reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0x4f,
-                                 [ type, offset, length ].pack("CL<L<").unpack("CCCCCCCCC")))
+            reply = send(Msg.new(src, dst, 0x40, 0x00, 0x4f,
+                                 [ type, offset, length ].pack("CL<L<").unpack("C*")), timeout)
 
+            break if reply == nil
             remaining = reply.payload[5..8].pack("C*").unpack("L<")[0]
             length = reply.payload[1..4].pack("C*").unpack("L<")[0]
             offset += length
@@ -336,9 +372,13 @@ class DUML
         return buf
     end
 
-    def cmd_query_device_info() # 0xff
-        reply = send(Msg.new(@src, @dst, 0x40, 0x00, 0xff))
-        return reply.payload[1..-1].pack("C*")
+    def cmd_query_device_info(src = @src, dst = @dst, timeout = @timeout) # 0xff
+        reply = send(Msg.new(src, dst, 0x40, 0x00, 0xff), timeout)
+        if reply != nil
+            return reply.payload[1..-1].pack("C*")
+        else
+            return nil
+        end
     end
 
     # -------------------------------------------------------------------------------------------------------------
@@ -355,7 +395,7 @@ class DUML
 
                 recv_msg = req[:msg]
                 if recv_msg == nil
-                    puts ("<< TIMEOUT waiting for reply: " + msg.to_s_short + " >>").yellow
+                    puts ("<< TIMEOUT waiting for reply: " + msg.to_s_short + " >>").yellow if @debug
                 end
 
                 return recv_msg
@@ -381,7 +421,7 @@ class DUML
             puts ("IN: " + msg.to_s).red if @debug
         end
 
-        if msg.attributes == 0xc0 # It's a reply
+        if msg.attributes & 0x80 == 0x80 # It's a reply
             @requests_mutex.synchronize do
                 req = @requests[msg.seq_no]
                 if req != nil

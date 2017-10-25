@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'rubygems'
+require 'rubygems/package'
 require 'net/ftp'
 require 'digest'
 require 'colorize'
@@ -113,8 +114,27 @@ class Upgrade
     end
 end
 
+def upgrade_file_info(path)
+    f = File.new(path)
+    t = Gem::Package::TarReader.new(f)
+    t.each() do |entry|
+        name = entry.full_name()
+        if name.match( /\.cfg\.sig$/ )
+            data = entry.read()
+            device_id = data.scan( /<device id="([^"]*)">/).first.last
+            formal_version = data.scan( /<firmware formal="([^"]*)">/).first.last
+
+            return device_id, formal_version
+        end
+    end
+    return nil, nil
+end
+
 if __FILE__ == $0
     # debugging
+
+    dev, ver = upgrade_file_info("dji_system.bin")
+    puts "%s -> %s" % [ dev, ver ]
 
     #con = DUML::Connection.new
     #con = DUML::ConnectionSocket.new("localhost", 19003)
