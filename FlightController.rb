@@ -143,11 +143,21 @@ class FlightController
     end
 
     def fc_set_param(param, value = param.value)
+        #TODO: add a Param setter for value that does this.
+        if value.is_a? String
+            case param.type
+            when 0..7
+                value = value.to_i
+            when 8
+                value = value.to_f
+            end
+        end
         payload = [ param.table, 0x0001, param.item, value ].pack("S<S<S<%s" % param.packing).unpack("C*")
         reply = @duml.send(DUML::Msg.new(@src, @dst, 0x40, 0x03, 0xe3, payload), @timeout)
-        status = reply.payload[0..1].pack("C*").unpack("S<")
+        status = reply.payload[0..1].pack("C*").unpack("S<")[0]
         if status != 0
-            return -status
+            puts "status: #{status}"
+            return status
         end
         return 0
     end
@@ -190,6 +200,16 @@ class FlightController
             end
         end
     end
+
+    def lookup_param(paramstr)
+        @params.each do |p|
+            if p.name == paramstr
+                fc_get_param(p)
+                return p
+            end
+        end
+        return nil
+    end
 end
 
 if __FILE__ == $0
@@ -203,6 +223,14 @@ if __FILE__ == $0
         parser.on("-f", "--find PARAM",
                   "Search for parameters matching the PARAM query") do |param|
             options["find"] = param
+        end
+        parser.on("-s", "--set PARAM",
+                  "To parameter which value you want to change") do |param|
+            options["set_param"] = param
+        end
+        parser.on("-v", "--value VALUE",
+                  "The new value for the parameter provided by -s") do |value|
+            options["set_value"] = value
         end
     end.parse!
 
@@ -225,6 +253,16 @@ if __FILE__ == $0
     if options["find"]
         puts "Looking for " + options["find"] + ":"
         fc.search_params(options["find"])
+    end
+
+    if options["set_param"]
+        puts "Setting '" + options["set_param"] + "' to " + options["set_value"]
+        p = fc.lookup_param(options["set_param"])
+        if p
+            fc.fc_set_param(p, options["set_value"])
+            fc.fc_get_param(p)
+            puts p
+        end
     end
 end
 
