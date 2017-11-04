@@ -132,13 +132,13 @@ class FlightController
     def fc_get_param(param)
         reply = @duml.send(DUML::Msg.new(@src, @dst, 0x40, 0x03, 0xe2,
                                          [ param.table, 0x0001, param.item ].pack("S<S<S<").unpack("C*")), @timeout)
-        status = reply.payload[0..1].pack("C*").unpack("S<")
+        status = reply.payload[0..1].pack("C*").unpack("S<")[0]
         if status != 0
             return nil
         end
 
         #table, item = reply.payload[2..5].pack("C*").unpack("S<S")
-        param.value = reply.payload[6..-1].pack("C*").unpack(param.packing)
+        param.value = reply.payload[6..-1].pack("C*").unpack(param.packing)[0]
         return param
     end
 
@@ -181,6 +181,15 @@ class FlightController
             end
         end
     end
+
+    def search_params(paramstr)
+        @params.each do |p|
+            if p.name.include? paramstr
+                fc_get_param(p)
+                puts p
+            end
+        end
+    end
 end
 
 if __FILE__ == $0
@@ -190,6 +199,10 @@ if __FILE__ == $0
         parser.on("-d", "--device DEVICE",
                   "Path to the serial port, e.g. /dev/tty.usbmodem1425") do |dev|
             options["dev"] = dev
+        end
+        parser.on("-f", "--find PARAM",
+                  "Search for parameters matching the PARAM query") do |param|
+            options["find"] = param
         end
     end.parse!
 
@@ -207,6 +220,11 @@ if __FILE__ == $0
         puts "Parameters for this version aren't cached yet, reading them first"
         fc.read_params_def_from_fc()
         fc.write_param_def()
+    end
+
+    if options["find"]
+        puts "Looking for " + options["find"] + ":"
+        fc.search_params(options["find"])
     end
 end
 
