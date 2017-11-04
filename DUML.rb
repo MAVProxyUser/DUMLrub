@@ -421,9 +421,7 @@ class DUML
     private
 
     def handle_incoming_message(msg)
-        if msg.set == 0 # Temporary filter for anything but set == 0 to reduce noise during development
-            puts ("IN: " + msg.to_s).red if @debug
-        end
+        puts ("IN: " + msg.to_s).red if @debug
 
         if msg.attributes & 0x80 == 0x80 # It's a reply
             @requests_mutex.synchronize do
