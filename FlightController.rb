@@ -58,9 +58,11 @@ class FlightController
         end
 
         # See if we can reach the FC
-        if @duml.cmd_dev_ping(@src, @dst, @timeout) == nil
+        @versions = @duml.cmd_dev_ver_get(@src, @dst, @timeout)
+        if @versions[:full] == nil
             raise "FlightController unresponsive"
         end
+        puts "FC Version: %s" % @versions[:app]
 
         if fc_assistant_unlock() == nil
             raise "Couldn't do an 'assistant unlock'"
