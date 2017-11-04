@@ -43,7 +43,7 @@ class Upgrade
         @duml.register_handler(0x00, 0x42) do |msg| upgrade_status(msg); end
 
         puts ("Talking to: " + @duml.cmd_query_device_info()).yellow
-        puts ("            " + @duml.cmd_dev_ver_get()).yellow
+        puts ("            " + @duml.cmd_dev_ver_get()[:full]).yellow
 
         # Get the cfg.sig file of the last upgrade to parse out the version string.
         # It's a full-featured IM*H file, but I got lazy and just regex'ed the version string out of it...

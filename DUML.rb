@@ -276,12 +276,16 @@ class DUML
         # WM220 RC Ver.A                                        23  0  5  1 23  0  5  1  1  0  0 128 0
         # 00 12 57 4d 32 32 30 20 41 43 20 56 65 72 2e 41 00 00 14 00 05 01 14 00 05 01 01 00 00 80 00
         # WM220 AC Ver.A                                        20  0  5  1 20  0  5  1  1  0  0 128 0
+        versions = {}
         if reply
-            ver = reply.payload[18..21]
-            return reply.payload[2..16].pack("C*") + ("  %02d.%02d.%02d.%02d" % [ ver[3], ver[2], ver[1], ver[0] ])
-        else
-            return nil
+            ver_ldr = reply.payload[18..21]
+            ver_app = reply.payload[22..25]
+            versions[:loader] = ("%02d.%02d.%02d.%02d" % [ ver_ldr[3], ver_ldr[2], ver_ldr[1], ver_ldr[0] ])
+            versions[:app]    = ("%02d.%02d.%02d.%02d" % [ ver_app[3], ver_app[2], ver_app[1], ver_app[0] ])
+            versions[:string] = reply.payload[2..16].pack("C*")
+            versions[:full]   = versions[:string] + "  Loader: " + versions[:loader] + "  App: " + versions[:app]
         end
+        return versions
     end
 
     def cmd_enter_upgrade_mode() # 0x07
