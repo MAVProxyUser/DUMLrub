@@ -200,8 +200,8 @@ if __FILE__ == $0
     end
 
     con = DUML::ConnectionSerial.new(port)
-    duml = DUML.new(0x2a, 0xc3, con, 1, true)
-    fc = FlightController.new(duml, true)
+    duml = DUML.new(0x2a, 0xc3, con, 1, false)
+    fc = FlightController.new(duml, false)
 
     if not fc.read_params_def()
         puts "Parameters for this version aren't cached yet, reading them first"
