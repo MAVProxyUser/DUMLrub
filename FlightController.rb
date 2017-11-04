@@ -4,6 +4,7 @@ require 'rubygems'
 require 'colorize'
 require 'json'
 require 'jsonable'
+require 'optparse'
 $:.unshift File.expand_path('.',__dir__)
 require 'DUML.rb'
 
@@ -149,31 +150,25 @@ class FlightController
 end
 
 if __FILE__ == $0
-    # debugging
 
-    port = $*[0]
+    options = {}
+    OptionParser.new do |parser|
+        parser.on("-d", "--device DEVICE",
+                  "Path to the serial port, e.g. /dev/tty.usbmodem1425") do |dev|
+            options["dev"] = dev
+        end
+    end.parse!
+
+    port = options["dev"]
     if port == nil
-        puts "Usage: FlightController.rb <serial port>"
+        puts "No serial port defined"
         exit
     end
 
     con = DUML::ConnectionSerial.new(port)
-    duml = DUML.new(0x2a, 0xc3, con, 0.5, false)
-    fc = FlightController.new(duml, false)
+    duml = DUML.new(0x2a, 0xc3, con, 1, true)
+    fc = FlightController.new(duml, true)
 
-    all = []
-    [0, 1].each do |t|
-        items = fc.fc_ask_table(t)
-        puts "Table %d => %d items" % [t, items]
-        (0..(items - 1)).each do |i|
-            p = fc.fc_ask_param(t, i)
-            fc.fc_get_param(p)
-            all = all + [ p ]
-            #puts "%d %d" % [ p.table, p.item ]
-            #puts p.to_json
-        end
-    end
-    puts JSON.pretty_generate(all)
 end
 
 # vim: expandtab:ts=4:sw=4
