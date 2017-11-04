@@ -44,6 +44,10 @@ class FlightController
             data = JSON.load string
             self.new data['a'], data['b']
         end
+
+        def self.types
+            return @@types
+        end
     end
 
     def initialize(duml = nil, debug = false)
@@ -133,7 +137,7 @@ class FlightController
             return nil
         end
 
-        #table, item  = reply.payload[2..5].pack("C*").unpack("S<S")
+        #table, item = reply.payload[2..5].pack("C*").unpack("S<S")
         param.value = reply.payload[6..-1].pack("C*").unpack(param.packing)
         return param
     end
@@ -146,6 +150,36 @@ class FlightController
             return -status
         end
         return 0
+    end
+
+    def read_params_def()
+        file = "params-" + @versions[:app] + ".json"
+        if File.file?(file)
+            f = File.new(file).read
+            all = []
+            p = JSON.parse(f)
+            @params = p.map { |p| Param.new(p['table'], p['item'], Param.types.index(p['type']), 0, p['default'], p['min'], p['max'], p['name']) }
+            return true
+        end
+        return false
+    end
+
+    def write_param_def()
+        f = File.new("params-" + @versions[:app] + ".json", "w")
+        f.write(JSON.pretty_generate(@params))
+    end
+
+    def read_params_def_from_fc()
+        @params = []
+        [0, 1].each do |t|
+            items = fc_ask_table(t)
+            puts "Table %d => %d items" % [t, items]
+            (0..(items - 1)).each do |i|
+                print "   %3d / %3d\r" % [ i + 1, items ]
+                p = fc_ask_param(t, i)
+                @params = @params + [ p ]
+            end
+        end
     end
 end
 
@@ -169,6 +203,11 @@ if __FILE__ == $0
     duml = DUML.new(0x2a, 0xc3, con, 1, true)
     fc = FlightController.new(duml, true)
 
+    if not fc.read_params_def()
+        puts "Parameters for this version aren't cached yet, reading them first"
+        fc.read_params_def_from_fc()
+        fc.write_param_def()
+    end
 end
 
 # vim: expandtab:ts=4:sw=4
