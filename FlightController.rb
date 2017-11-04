@@ -4,6 +4,7 @@ require 'rubygems'
 require 'colorize'
 require 'json'
 require 'jsonable'
+require 'optparse'
 $:.unshift File.expand_path('.',__dir__)
 require 'DUML.rb'
 
@@ -43,6 +44,10 @@ class FlightController
             data = JSON.load string
             self.new data['a'], data['b']
         end
+
+        def self.types
+            return @@types
+        end
     end
 
     def initialize(duml = nil, debug = false)
@@ -58,9 +63,11 @@ class FlightController
         end
 
         # See if we can reach the FC
-        if @duml.cmd_dev_ping(@src, @dst, @timeout) == nil
+        @versions = @duml.cmd_dev_ver_get(@src, @dst, @timeout)
+        if @versions[:full] == nil
             raise "FlightController unresponsive"
         end
+        puts "FC Version: %s" % @versions[:app]
 
         if fc_assistant_unlock() == nil
             raise "Couldn't do an 'assistant unlock'"
@@ -125,53 +132,138 @@ class FlightController
     def fc_get_param(param)
         reply = @duml.send(DUML::Msg.new(@src, @dst, 0x40, 0x03, 0xe2,
                                          [ param.table, 0x0001, param.item ].pack("S<S<S<").unpack("C*")), @timeout)
-        status = reply.payload[0..1].pack("C*").unpack("S<")
+        status = reply.payload[0..1].pack("C*").unpack("S<")[0]
         if status != 0
             return nil
         end
 
-        #table, item  = reply.payload[2..5].pack("C*").unpack("S<S")
-        param.value = reply.payload[6..-1].pack("C*").unpack(param.packing)
+        #table, item = reply.payload[2..5].pack("C*").unpack("S<S")
+        param.value = reply.payload[6..-1].pack("C*").unpack(param.packing)[0]
         return param
     end
 
     def fc_set_param(param, value = param.value)
+        #TODO: add a Param setter for value that does this.
+        if value.is_a? String
+            case param.type
+            when 0..7
+                value = value.to_i
+            when 8
+                value = value.to_f
+            end
+        end
         payload = [ param.table, 0x0001, param.item, value ].pack("S<S<S<%s" % param.packing).unpack("C*")
         reply = @duml.send(DUML::Msg.new(@src, @dst, 0x40, 0x03, 0xe3, payload), @timeout)
-        status = reply.payload[0..1].pack("C*").unpack("S<")
+        status = reply.payload[0..1].pack("C*").unpack("S<")[0]
         if status != 0
-            return -status
+            puts "status: #{status}"
+            return status
         end
         return 0
+    end
+
+    def read_params_def()
+        file = "params-" + @versions[:app] + ".json"
+        if File.file?(file)
+            f = File.new(file).read
+            all = []
+            p = JSON.parse(f)
+            @params = p.map { |p| Param.new(p['table'], p['item'], Param.types.index(p['type']), 0, p['default'], p['min'], p['max'], p['name']) }
+            return true
+        end
+        return false
+    end
+
+    def write_param_def()
+        f = File.new("params-" + @versions[:app] + ".json", "w")
+        f.write(JSON.pretty_generate(@params))
+    end
+
+    def read_params_def_from_fc()
+        @params = []
+        [0, 1].each do |t|
+            items = fc_ask_table(t)
+            puts "Table %d => %d items" % [t, items]
+            (0..(items - 1)).each do |i|
+                print "   %3d / %3d\r" % [ i + 1, items ]
+                p = fc_ask_param(t, i)
+                @params = @params + [ p ]
+            end
+        end
+    end
+
+    def search_params(paramstr)
+        @params.each do |p|
+            if p.name.include? paramstr
+                fc_get_param(p)
+                puts p
+            end
+        end
+    end
+
+    def lookup_param(paramstr)
+        @params.each do |p|
+            if p.name == paramstr
+                fc_get_param(p)
+                return p
+            end
+        end
+        return nil
     end
 end
 
 if __FILE__ == $0
-    # debugging
 
-    port = $*[0]
+    options = {}
+    OptionParser.new do |parser|
+        parser.on("-d", "--device DEVICE",
+                  "Path to the serial port, e.g. /dev/tty.usbmodem1425") do |dev|
+            options["dev"] = dev
+        end
+        parser.on("-f", "--find PARAM",
+                  "Search for parameters matching the PARAM query") do |param|
+            options["find"] = param
+        end
+        parser.on("-s", "--set PARAM",
+                  "To parameter which value you want to change") do |param|
+            options["set_param"] = param
+        end
+        parser.on("-v", "--value VALUE",
+                  "The new value for the parameter provided by -s") do |value|
+            options["set_value"] = value
+        end
+    end.parse!
+
+    port = options["dev"]
     if port == nil
-        puts "Usage: FlightController.rb <serial port>"
+        puts "No serial port defined"
         exit
     end
 
     con = DUML::ConnectionSerial.new(port)
-    duml = DUML.new(0x2a, 0xc3, con, 0.5, false)
+    duml = DUML.new(0x2a, 0xc3, con, 1, false)
     fc = FlightController.new(duml, false)
 
-    all = []
-    [0, 1].each do |t|
-        items = fc.fc_ask_table(t)
-        puts "Table %d => %d items" % [t, items]
-        (0..(items - 1)).each do |i|
-            p = fc.fc_ask_param(t, i)
+    if not fc.read_params_def()
+        puts "Parameters for this version aren't cached yet, reading them first"
+        fc.read_params_def_from_fc()
+        fc.write_param_def()
+    end
+
+    if options["find"]
+        puts "Looking for " + options["find"] + ":"
+        fc.search_params(options["find"])
+    end
+
+    if options["set_param"]
+        puts "Setting '" + options["set_param"] + "' to " + options["set_value"]
+        p = fc.lookup_param(options["set_param"])
+        if p
+            fc.fc_set_param(p, options["set_value"])
             fc.fc_get_param(p)
-            all = all + [ p ]
-            #puts "%d %d" % [ p.table, p.item ]
-            #puts p.to_json
+            puts p
         end
     end
-    puts JSON.pretty_generate(all)
 end
 
 # vim: expandtab:ts=4:sw=4
