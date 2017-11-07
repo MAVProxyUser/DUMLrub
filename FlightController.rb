@@ -224,13 +224,14 @@ if __FILE__ == $0
                   "Search for parameters matching the PARAM query") do |param|
             options["find"] = param
         end
+        parser.on("-v", "--value VALUE",
+                  "The new value for any cmdline option which requires a value, e.g. -s") do |value|
+            options["value"] = value
+        end
         parser.on("-s", "--set PARAM",
-                  "To parameter which value you want to change") do |param|
+                  "The parameter which value you want to change") do |param|
             options["set_param"] = param
         end
-        parser.on("-v", "--value VALUE",
-                  "The new value for the parameter provided by -s") do |value|
-            options["set_value"] = value
         end
     end.parse!
 
@@ -253,16 +254,20 @@ if __FILE__ == $0
     if options["find"]
         puts "Looking for " + options["find"] + ":"
         fc.search_params(options["find"])
+        exit
     end
 
     if options["set_param"]
-        puts "Setting '" + options["set_param"] + "' to " + options["set_value"]
         p = fc.lookup_param(options["set_param"])
         if p
-            fc.fc_set_param(p, options["set_value"])
+            if options["value"]
+                puts "Setting '" + options["set_param"] + "' to " + options["value"]
+                fc.fc_set_param(p, options["value"])
+            end
             fc.fc_get_param(p)
             puts p
         end
+        exit
     end
 end
 
