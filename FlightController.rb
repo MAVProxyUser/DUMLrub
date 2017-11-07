@@ -210,6 +210,60 @@ class FlightController
         end
         return nil
     end
+
+    ### Monitor commands ###
+
+    def fc_monitor(cmd, payload = [])
+        msg = ([ cmd, payload.length ].pack("CC") + payload.pack("C*")).unpack("C*")
+        reply = @duml.send(DUML::Msg.new(@src, @dst, 0x40, 0x03, 0xda, msg), @timeout)
+        return reply
+    end
+
+    def fc_monitor_set_purpose(purpose)
+        if purpose.length > 100
+            puts "Error: purpose length (#{purpose.length}) > 100"
+            return nil
+        end
+        bug_length = 76 - (1 + 16 + 1 + 10 + 1)
+        if purpose.length > bug_length
+            puts "Warning: purpose length (#{purpose.length}) > #{bug_length}. Due to a " +
+                 "bug in dji_network, only the first #{bug_length} characters will be " +
+                 "transmitted over wifi."
+        end
+        reply = fc_monitor(0x01, purpose.unpack("C*"))
+        if reply == nil
+            return nil
+        end
+        return reply.payload[1]
+    end
+
+    def fc_monitor_get_purpose()
+        reply = fc_monitor(0x02)
+        if reply == nil
+            return nil
+        end
+        return reply.payload[3..-1].pack("C*")
+    end
+
+    def fc_monitor_set_droneid(id)
+        if id.length > 10
+            puts "Error: id length (#{id.length}) > 10"
+            return nil
+        end
+        reply = fc_monitor(0x03, id.unpack("C*"))
+        if reply == nil
+            return nil
+        end
+        return reply.payload[1]
+    end
+
+    def fc_monitor_get_droneid()
+        reply = fc_monitor(0x04)
+        if reply == nil
+            return nil
+        end
+        return reply.payload[3..-1].pack("C*")
+    end
 end
 
 if __FILE__ == $0
@@ -232,6 +286,13 @@ if __FILE__ == $0
                   "The parameter which value you want to change") do |param|
             options["set_param"] = param
         end
+        parser.on("-p", "--purpose",
+                  "Set/Get the flight purpose. If -v is also provided, the purpose will be set to that value") do
+            options["purpose"] = true
+        end
+        parser.on("-D", "--droneid",
+                  "Set/Get the drone ID. If -v is also provided, the drone ID will be set to that value") do
+            options["droneid"] = true
         end
     end.parse!
 
@@ -269,6 +330,37 @@ if __FILE__ == $0
         end
         exit
     end
+
+    if options["purpose"]
+        if options["value"]
+            reply = fc.fc_monitor_set_purpose(options["value"])
+            if reply == 0
+                puts "Success setting purpose to '#{options["value"]}'"
+            else
+                puts "Failed setting purpose, errorcode: #{reply}"
+            end
+        else
+            reply = fc.fc_monitor_get_purpose()
+            puts reply
+        end
+        exit
+    end
+
+    if options["droneid"]
+        if options["value"]
+            reply = fc.fc_monitor_set_droneid(options["value"])
+            if reply == 0
+                puts "Success setting droneID to '#{options["value"]}'"
+            else
+                puts "Failed setting droneID, errorcode: #{reply}"
+            end
+        else
+            reply = fc.fc_monitor_get_droneid()
+            puts reply
+        end
+        exit
+    end
+
 end
 
 # vim: expandtab:ts=4:sw=4
