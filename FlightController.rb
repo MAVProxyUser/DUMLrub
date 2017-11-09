@@ -213,8 +213,12 @@ class FlightController
 
     ### Monitor commands ###
 
-    def fc_monitor(cmd, payload = [])
-        msg = ([ cmd, payload.length ].pack("CC") + payload.pack("C*")).unpack("C*")
+    def fc_monitor(cmd, payload = [], encode_length = true)
+        if encode_length
+            msg = ([ cmd, payload.length ].pack("CC") + payload.pack("C*")).unpack("C*")
+        else
+            msg = ([ cmd ].pack("C") + payload.pack("C*")).unpack("C*")
+        end
         reply = @duml.send(DUML::Msg.new(@src, @dst, 0x40, 0x03, 0xda, msg), @timeout)
         return reply
     end
