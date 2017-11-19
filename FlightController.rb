@@ -273,7 +273,12 @@ end
 if __FILE__ == $0
 
     options = {}
+    options["debug"] = false
     OptionParser.new do |parser|
+        parser.on("-V", "--verbose",
+                  "Enable verbose mode. This will show the debug output of the FC") do
+            options["debug"] = true
+        end
         parser.on("-d", "--device DEVICE",
                   "Path to the serial port, e.g. /dev/tty.usbmodem1425") do |dev|
             options["dev"] = dev
@@ -308,7 +313,7 @@ if __FILE__ == $0
 
     con = DUML::ConnectionSerial.new(port)
     duml = DUML.new(0x2a, 0xc3, con, 1, false)
-    fc = FlightController.new(duml, false)
+    fc = FlightController.new(duml, options["debug"])
 
     if not fc.read_params_def()
         puts "Parameters for this version aren't cached yet, reading them first"
@@ -365,6 +370,7 @@ if __FILE__ == $0
         exit
     end
 
+    sleep(0.5) if options["debug"]
 end
 
 # vim: expandtab:ts=4:sw=4
