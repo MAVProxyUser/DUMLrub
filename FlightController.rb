@@ -251,6 +251,24 @@ class FlightController
         f.write(JSON.pretty_generate(pv))
     end
 
+    def restore(file)
+        if File.file?(file)
+            f = File.new(file).read
+            all = []
+            JSON.parse(f).each do |pv|
+                p = lookup_param(pv['name'])
+                if p
+                    puts "Setting '#{pv['name']}' to #{pv['value']}"
+                    fc_set_param(p, pv['value'])
+                else
+                    puts "'#{pv['name']}' not found"
+                end
+            end
+            return true
+        end
+        return false
+    end
+
     ### Monitor commands ###
 
     def fc_monitor(cmd, payload = [], encode_length = true)
@@ -344,6 +362,10 @@ if __FILE__ == $0
                   "Store all parameters when performing a backup") do
             options["full"] = true
         end
+        parser.on("-r", "--restore FILE",
+                  "Restore parameters from FILE") do |file|
+            options["restore"] = file
+        end
         parser.on("-R", "--reset",
                   "Reset all parameters to their factory defaults") do
             options["reset"] = true
@@ -395,6 +417,11 @@ if __FILE__ == $0
 
     if options["backup"]
         fc.backup(options["backup"], options["full"])
+        exit
+    end
+
+    if options["restore"]
+        fc.restore(options["restore"])
         exit
     end
 
