@@ -162,6 +162,17 @@ class FlightController
         return 0
     end
 
+    def fc_reset_all()
+        reply = @duml.send(DUML::Msg.new(@src, @dst, 0x40, 0x03, 0xf3), 10.0)
+        if reply == nil
+            puts "status: timeout or nothing to reset..."
+            return -1
+        else
+            puts "status: #{reply.payload[0]}"
+            return reply.payload[0]
+        end
+    end
+
     def read_params_def()
         file = "params-" + @versions[:app] + ".json"
         if File.file?(file)
@@ -295,6 +306,10 @@ if __FILE__ == $0
                   "The parameter which value you want to change") do |param|
             options["set_param"] = param
         end
+        parser.on("-R", "--reset",
+                  "Reset all parameters to their factory defaults") do
+            options["reset"] = true
+        end
         parser.on("-p", "--purpose",
                   "Set/Get the flight purpose. If -v is also provided, the purpose will be set to that value") do
             options["purpose"] = true
@@ -337,6 +352,11 @@ if __FILE__ == $0
             fc.fc_get_param(p)
             puts p
         end
+        exit
+    end
+
+    if options["reset"]
+        fc.fc_reset_all()
         exit
     end
 
