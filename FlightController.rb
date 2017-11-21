@@ -390,7 +390,7 @@ if __FILE__ == $0
         exit
     end
 
-    sleep(0.5) if options["debug"]
+    sleep(1) if options["debug"]
 end
 
 # vim: expandtab:ts=4:sw=4
