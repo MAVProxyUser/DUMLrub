@@ -308,7 +308,7 @@ class DUML
 
         if reply == nil
             return nil
-        elsif reply.payload.length == 3
+        elsif (reply.payload.length == 3) || (reply.payload.length == 5)
             transfer_size = reply.payload[1..2].pack("C*").unpack("S<")
             return { transfer_size: transfer_size, ftp: false }
         elsif reply.payload.length == 263
