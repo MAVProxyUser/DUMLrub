@@ -50,6 +50,16 @@ class FlightController
         end
     end
 
+    class ParamValue
+        def initialize(param)
+            @param = param
+        end
+
+        def to_json(a)
+            { 'name' => @param.name, 'value' => @param.value }.to_json
+        end
+    end
+
     def initialize(duml = nil, debug = false)
         @duml = duml
         @debug = debug
@@ -162,6 +172,17 @@ class FlightController
         return 0
     end
 
+    def fc_reset_all()
+        reply = @duml.send(DUML::Msg.new(@src, @dst, 0x40, 0x03, 0xf3), 10.0)
+        if reply == nil
+            puts "status: timeout or nothing to reset..."
+            return -1
+        else
+            puts "status: #{reply.payload[0]}"
+            return reply.payload[0]
+        end
+    end
+
     def read_params_def()
         file = "params-" + @versions[:app] + ".json"
         if File.file?(file)
@@ -192,6 +213,13 @@ class FlightController
         end
     end
 
+    def read_params_val_from_fc()
+        @params.each.with_index do |p, i|
+            print "   %3d / %3d\r" % [ i + 1, @params.length ]
+            fc_get_param(p)
+        end
+    end
+
     def search_params(paramstr)
         @params.each do |p|
             if p.name.include? paramstr
@@ -211,10 +239,44 @@ class FlightController
         return nil
     end
 
+    def backup(file, full)
+        read_params_val_from_fc()
+        pv = []
+        @params.each do |p|
+            if full || (p.value != p.default)
+                pv = pv + [ ParamValue.new(p) ]
+            end
+        end
+        f = File.new(file, "w")
+        f.write(JSON.pretty_generate(pv))
+    end
+
+    def restore(file)
+        if File.file?(file)
+            f = File.new(file).read
+            all = []
+            JSON.parse(f).each do |pv|
+                p = lookup_param(pv['name'])
+                if p
+                    puts "Setting '#{pv['name']}' to #{pv['value']}"
+                    fc_set_param(p, pv['value'])
+                else
+                    puts "'#{pv['name']}' not found"
+                end
+            end
+            return true
+        end
+        return false
+    end
+
     ### Monitor commands ###
 
-    def fc_monitor(cmd, payload = [])
-        msg = ([ cmd, payload.length ].pack("CC") + payload.pack("C*")).unpack("C*")
+    def fc_monitor(cmd, payload = [], encode_length = true)
+        if encode_length
+            msg = ([ cmd, payload.length ].pack("CC") + payload.pack("C*")).unpack("C*")
+        else
+            msg = ([ cmd ].pack("C") + payload.pack("C*")).unpack("C*")
+        end
         reply = @duml.send(DUML::Msg.new(@src, @dst, 0x40, 0x03, 0xda, msg), @timeout)
         return reply
     end
@@ -269,7 +331,13 @@ end
 if __FILE__ == $0
 
     options = {}
+    options["debug"] = false
+    options["full"] = false
     OptionParser.new do |parser|
+        parser.on("-V", "--verbose",
+                  "Enable verbose mode. This will show the debug output of the FC") do
+            options["debug"] = true
+        end
         parser.on("-d", "--device DEVICE",
                   "Path to the serial port, e.g. /dev/tty.usbmodem1425") do |dev|
             options["dev"] = dev
@@ -285,6 +353,22 @@ if __FILE__ == $0
         parser.on("-s", "--set PARAM",
                   "The parameter which value you want to change") do |param|
             options["set_param"] = param
+        end
+        parser.on("-b", "--backup FILE",
+                  "Backup parameters to FILE. By default, only the parameters that differ from the default are saved") do |file|
+            options["backup"] = file
+        end
+        parser.on("-F", "--full",
+                  "Store all parameters when performing a backup") do
+            options["full"] = true
+        end
+        parser.on("-r", "--restore FILE",
+                  "Restore parameters from FILE") do |file|
+            options["restore"] = file
+        end
+        parser.on("-R", "--reset",
+                  "Reset all parameters to their factory defaults") do
+            options["reset"] = true
         end
         parser.on("-p", "--purpose",
                   "Set/Get the flight purpose. If -v is also provided, the purpose will be set to that value") do
@@ -303,8 +387,8 @@ if __FILE__ == $0
     end
 
     con = DUML::ConnectionSerial.new(port)
-    duml = DUML.new(0x2a, 0xc3, con, 1, false)
-    fc = FlightController.new(duml, false)
+    duml = DUML.new(0x2a, 0xc3, con, 3.0, false)
+    fc = FlightController.new(duml, options["debug"])
 
     if not fc.read_params_def()
         puts "Parameters for this version aren't cached yet, reading them first"
@@ -328,6 +412,21 @@ if __FILE__ == $0
             fc.fc_get_param(p)
             puts p
         end
+        exit
+    end
+
+    if options["backup"]
+        fc.backup(options["backup"], options["full"])
+        exit
+    end
+
+    if options["restore"]
+        fc.restore(options["restore"])
+        exit
+    end
+
+    if options["reset"]
+        fc.fc_reset_all()
         exit
     end
 
@@ -361,6 +460,7 @@ if __FILE__ == $0
         exit
     end
 
+    sleep(1) if options["debug"]
 end
 
 # vim: expandtab:ts=4:sw=4
