@@ -323,7 +323,7 @@ class DUML
     end
 
     def cmd_transfer_upgrade_data(index, data, enc = 0) # 0x09
-        send(Msg.new(@src, @dst, 0x40, 0x00, 0x09,
+        send(Msg.new(@src, @dst, 0x00, 0x00, 0x09,
             [ enc ] + [ index ].pack("L<").unpack("CCCC") + [ data.length ].pack("S<").unpack("CC") + data))
     end
 
