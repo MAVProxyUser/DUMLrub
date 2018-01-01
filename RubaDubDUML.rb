@@ -53,7 +53,12 @@ class PwnSauce
         # note the 0x143... and usbmodem143...
 
         puts "Connecting to serial: #{port_str}"
-        connection = DUML::ConnectionSerial.new(port_str)
+	begin
+	        connection = DUML::ConnectionSerial.new(port_str)
+	rescue Errno::EBUSY
+		puts "close all apps like Assistant 2 that are connected to your drone."
+		exit
+	end
 
         puts "To debug, if you have root: busybox tail -f /ftp/upgrade/dji/log/upgrade00.log | grep -v sys_up_status_push_threa"
 
