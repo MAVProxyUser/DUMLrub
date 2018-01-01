@@ -1,9 +1,3 @@
-[submodule "dji_system.bin"]
-	path = bins
-	url = https://github.com/MAVProxyUser/dji_system.bin
-[submodule "firm_cache"]
-	path = firm_cache
-	url = https://github.com/MAVProxyUser/firm_cache
 [submodule "exploits"]
 	path = exploits
 	url = https://github.com/MAVProxyUser/DUMLsploit.git
