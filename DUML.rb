@@ -88,8 +88,12 @@ class DUML
             data_bits = 8
             stop_bits = 1
             parity = SerialPort::NONE
-
-            @con = SerialPort.new(@port, baud_rate, data_bits, stop_bits, parity)
+	    begin
+	            @con = SerialPort.new(@port, baud_rate, data_bits, stop_bits, parity)
+	    rescue
+		    puts "Serial port connection failed... did you supply a serial port as first command line arguement?"
+		    exit
+	    end
         end
     end
 
