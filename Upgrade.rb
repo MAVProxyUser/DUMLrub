@@ -151,7 +151,7 @@ if __FILE__ == $0
     #con = DUML::Connection.new
     #con = DUML::ConnectionSocket.new("localhost", 19003)
     #con = DUML::ConnectionSocket.new("192.168.1.1", 19003)
-    con = DUML::ConnectionSerial.new("/dev/tty.usbmodem1425")
+    con = DUML::ConnectionSerial.new(ARGV[0])
 
     #aircraft = Upgrade.new("dji_system.bin", 0x2a, 0x28, 2, 4, con, false)
     #aircraft.go
