@@ -183,12 +183,23 @@ class FlightController
         end
     end
 
+    def clean_neg_fourteen(arrin, arrout)
+        arrin.each do |child|
+             if child == -14
+             else
+                    arrout << child
+             end
+        end
+    end
+    
     def read_params_def()
         file = "params-" + @versions[:app] + ".json"
         if File.file?(file)
             f = File.new(file).read
             all = []
-            p = JSON.parse(f)
+            p = []
+            z = JSON.parse(f)
+            clean_neg_fourteen(z, p)
             @params = p.map { |p| Param.new(p['table'], p['item'], Param.types.index(p['type']), 0, p['default'], p['min'], p['max'], p['name']) }
             return true
         end
